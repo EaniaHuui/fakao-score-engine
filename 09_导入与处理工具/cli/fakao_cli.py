@@ -74,7 +74,13 @@ def is_within(path, directory):
 
 def subject_from_text(text):
     subjects = ["刑法", "民法", "刑诉", "民诉", "行政法", "理论法", "商经知", "三国法"]
-    return next((s for s in subjects if s in text), "未分类")
+    for s in subjects:
+        if s in text:
+            return s
+    for kw in ["习近平法治思想", "法治思想", "法理学", "宪法"]:
+        if kw in text:
+            return "理论法"
+    return "未分类"
 
 
 def parse_questions(path):
@@ -119,7 +125,7 @@ def parse_questions(path):
             "options": options,
             "answers": answers,
             "user_answers": user_answers,
-            "is_imported_mistake": bool(user_answers and set(user_answers) != set(answers)),
+            "is_imported_mistake": ("错题" in path.name) or bool(user_answers and set(user_answers) != set(answers)),
             "legal_version": "待确认",
             "review_status": "待审核",
             "tags": [],
@@ -539,14 +545,22 @@ def cmd_cloud(args):
 
 def cmd_zhuma(args):
     script = Path(__file__).with_name("竹马全自动导出神器.py")
-    command = [sys.executable, str(script)]
+    action = getattr(args, "action", None) or "auto"
+    command = [sys.executable, str(script), action]
     if args.chrome_path:
         command.extend(["--chrome-path", args.chrome_path])
-    completed = subprocess.run(command, cwd=str(ROOT), check=False)
+    completed = subprocess.run(command, cwd=str(ROOT), check=False, capture_output=True, text=True)
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
     if completed.returncode:
         raise SystemExit(completed.returncode)
-    cmd_error_analysis(args)
-    cmd_today(args)
+    # 仅当脚本实际完成错题导出（出现成功标记）时才继续错误分析与今日任务；
+    # open / 等待登录等分支没有该标记，不会误触发。
+    if action in ("login", "auto") and "错题导出完成" in completed.stdout:
+        cmd_error_analysis(args)
+        cmd_today(args)
 
 
 def build_parser():
@@ -560,7 +574,9 @@ def build_parser():
     imp = sub.add_parser("import", help="导入用户资料并尝试解析 Markdown 题目")
     imp.add_argument("path")
     imp.set_defaults(func=cmd_import)
-    zhuma = sub.add_parser("zhuma", help="登录竹马后自动导入自己的错题")
+    zhuma = sub.add_parser("zhuma", help="导入竹马错题（auto/open/login/close）")
+    zhuma.add_argument("action", nargs="?", default="auto", choices=["auto", "open", "login", "close"],
+                       help="auto=有会话直接导出否则打开浏览器 open=打开浏览器 login=登录后导出 close=关闭浏览器")
     zhuma.add_argument("--chrome-path", help="Chrome、Chromium 或 Edge 的可执行文件路径")
     zhuma.set_defaults(func=cmd_zhuma)
     for name, func, help_text in [("inspect", cmd_inspect, "检查导入和题目状态"), ("index", cmd_index, "为已确认资料建立题目索引"), ("analyze", cmd_analyze, "分析近十年真题并生成预测候选"), ("diagnose", cmd_diagnose, "生成分科诊断"), ("error-analysis", cmd_error_analysis, "分析错误知识点和题型"), ("build-bank", cmd_build_bank, "生成个人专项题库"), ("error-attack", cmd_error_attack, "生成错误专项突击任务"), ("plan", cmd_plan, "根据错误和题库生成迭代计划"), ("today", cmd_today, "生成今日提分任务"), ("metrics", cmd_metrics, "生成提分指标周报")]:
