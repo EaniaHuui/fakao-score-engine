@@ -5,6 +5,7 @@
 | Skill | 作用 |
 |---|---|
 | `fakao` | 初始化用户档案、摸底和学习合同 |
+| `fakao-update` | 检查远端更新、保护本地修改并处理冲突 |
 | `fakao-interaction-protocol` | 统一低输入提问、选项和作答格式 |
 | `fakao-training-session` | 逐题出题、追问、反馈、记录和掌握验收 |
 | `fakao-metrics` | 只用正确率、耗时、猜对比例和模拟成绩评估提分 |

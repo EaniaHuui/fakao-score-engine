@@ -75,8 +75,11 @@
 - `fakao-error-attack-coach`：把同类错误转成专项训练和复测。
 - `fakao-personalized-bank`：从已确认题目中抽取当前薄弱点的有限题目。
 - `fakao-adaptive-planner`：根据新作答记录调整下一轮计划。
+- `fakao-update`：更新项目代码和规则，保护用户修改并处理版本冲突。
 
 完整列表见 [skills/README.md](skills/README.md)。AI 生成的法律结论和变体题默认待审核，不能直接当作正式资料。
+
+项目更新时使用 `/fakao-update`。它会先检查本地改动和远端版本；无冲突才合并，冲突则生成报告并等待确认，不会覆盖你的资料或规则。
 
 完整的数据流和对话产物见 [匿名端到端示例](examples/end_to_end_example.md)。
 
