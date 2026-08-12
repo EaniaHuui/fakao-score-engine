@@ -1,0 +1,2 @@
+#!/bin/sh
+exec python3 "$(dirname "$0")/09_导入与处理工具/cli/fakao_cli.py" "$@"

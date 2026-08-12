@@ -1,0 +1,30 @@
+# 用户资料和运行时数据
+00_系统与用户/
+01_待导入资料/*
+02_原始资料库/
+03_考点知识库/考点索引/*.json
+03_考点知识库/考点索引/*.md
+04_题目训练库/
+05_训练记录/
+06_提分任务/
+07_模拟考试/
+08_阶段性材料/
+09_导入与处理工具/import/*
+!09_导入与处理工具/import/.gitkeep
+
+# 凭据与本地文件
+*.jsonl
+*.cookie
+*.token
+*.pem
+.env
+.env.*
+curl.txt
+input_task.txt
+zhuma.json
+credentials.json
+*.credentials.json
+secrets.*
+.DS_Store
+__pycache__/
+*.pyc
