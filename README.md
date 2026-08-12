@@ -45,6 +45,7 @@
 资料导入后说：
 
 ```text
+读取 skills/Fakao-Training-Session/SKILL.md，开始今天的逐题训练。
 根据我的错题，识别反复错误的错因、考点和题型，生成错误专项训练和今天的任务。
 任务要包含原题重做、隔日复测和完成标准。
 ```
@@ -65,6 +66,8 @@
 项目内 Skill 对应这个过程：
 
 - `fakao`：建立学习档案、时间容量和验收指标。
+- `Fakao-Interaction-Protocol`：统一低输入提问、选项和作答格式。
+- `Fakao-Training-Session`：逐题出题、追问、反馈、记录和掌握验收。
 - `Fakao-Importer`：导入并审核资料，不覆盖原文。
 - `Fakao-Mistake-Diagnostician`：区分不会规则、规则混淆、漏条件、审题、速度和策略问题。
 - `Fakao-Error-Attack-Coach`：把同类错误转成专项训练和复测。
