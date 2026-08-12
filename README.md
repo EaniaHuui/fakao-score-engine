@@ -40,6 +40,8 @@
 保留来源、法律版本和审核状态；不要改写原始资料。
 ```
 
+导入竹马错题时，只需说“帮我导入竹马错题”。浏览器会自动打开；你自己登录、完成验证码后回到终端按回车，系统会自动导入、分析并生成今日任务。不需要提供接口 JSON、cURL、cookie 或 token。
+
 ### 4. 拿到今天的提分任务
 
 资料导入后说：
@@ -126,6 +128,7 @@ Skill 负责问诊、判断和解释；CLI 负责稳定地读写本地资料、�
 ./fakao --help
 ./fakao init --target-score 108 --daily-minutes 120
 ./fakao import ./你的资料目录
+./fakao zhuma
 ./fakao error-analysis
 ./fakao error-attack
 ./fakao today

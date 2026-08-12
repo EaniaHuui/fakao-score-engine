@@ -413,7 +413,7 @@ def cmd_error_attack(args):
 def cmd_today(args):
     questions = all_questions()
     due = [q for q in questions if q.get("next_review") and q["next_review"] <= date.today().isoformat()]
-    due = due[: max(1, min(20, args.limit))]
+    due = due[: max(1, min(20, getattr(args, "limit", 8)))]
     tasks = [{"type": "review_question", "question_id": q["id"], "subject": q["subject"], "reason": "错题或到期复测", "estimated_minutes": 3} for q in due]
     if not tasks:
         tasks = [{"type": "diagnostic", "reason": "暂无复测数据，先完成摸底题", "estimated_minutes": 20}]
@@ -537,6 +537,18 @@ def cmd_cloud(args):
     raise SystemExit(subprocess.run(command, cwd=str(ROOT), check=False).returncode)
 
 
+def cmd_zhuma(args):
+    script = Path(__file__).with_name("竹马全自动导出神器.py")
+    command = [sys.executable, str(script)]
+    if args.chrome_path:
+        command.extend(["--chrome-path", args.chrome_path])
+    completed = subprocess.run(command, cwd=str(ROOT), check=False)
+    if completed.returncode:
+        raise SystemExit(completed.returncode)
+    cmd_error_analysis(args)
+    cmd_today(args)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="fakao", description="法考提分 CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -548,6 +560,9 @@ def build_parser():
     imp = sub.add_parser("import", help="导入用户资料并尝试解析 Markdown 题目")
     imp.add_argument("path")
     imp.set_defaults(func=cmd_import)
+    zhuma = sub.add_parser("zhuma", help="登录竹马后自动导入自己的错题")
+    zhuma.add_argument("--chrome-path", help="Chrome、Chromium 或 Edge 的可执行文件路径")
+    zhuma.set_defaults(func=cmd_zhuma)
     for name, func, help_text in [("inspect", cmd_inspect, "检查导入和题目状态"), ("index", cmd_index, "为已确认资料建立题目索引"), ("analyze", cmd_analyze, "分析近十年真题并生成预测候选"), ("diagnose", cmd_diagnose, "生成分科诊断"), ("error-analysis", cmd_error_analysis, "分析错误知识点和题型"), ("build-bank", cmd_build_bank, "生成个人专项题库"), ("error-attack", cmd_error_attack, "生成错误专项突击任务"), ("plan", cmd_plan, "根据错误和题库生成迭代计划"), ("today", cmd_today, "生成今日提分任务"), ("metrics", cmd_metrics, "生成提分指标周报")]:
         item = sub.add_parser(name, help=help_text)
         if name == "analyze":

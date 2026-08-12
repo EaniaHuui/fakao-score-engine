@@ -1,4 +1,3 @@
-import re
 import json
 import time
 import random
@@ -194,22 +193,6 @@ def browser_login_headers(chrome_path=None):
         except subprocess.TimeoutExpired:
             process.kill()
         shutil.rmtree(profile_dir, ignore_errors=True)
-
-def parse_curl(curl_str):
-    headers = {}
-    lines = curl_str.strip().split('\n')
-    for line in lines:
-        line = line.strip()
-        if line.endswith('\\'):
-            line = line[:-1].strip()
-        match = re.search(r"-[Hh]\s+'([^:]+):\s*(.+?)'", line)
-        if match:
-            headers[match.group(1)] = match.group(2)
-        match_b = re.search(r"-b\s+'([^']+)'", line)
-        if match_b:
-            headers['cookie'] = match_b.group(1)
-    return headers
-
 
 def usable_headers(headers):
     allowed = {"accept", "authorization", "cookie", "origin", "referer", "token", "user-agent"}
@@ -548,70 +531,23 @@ def pull_past_exams(headers, output_dir):
     process_past_exam_catalog(headers, 104, 270, 705, output_dir)
 
 
-def read_curl(curl_file):
-    if curl_file:
-        return Path(curl_file).read_text(encoding='utf-8')
-    print("请输入竹马 cURL，结束时单独输入 EOF：")
-    lines = []
-    while True:
-        try:
-            line = input()
-        except EOFError:
-            break
-        if line.strip() == 'EOF':
-            break
-        lines.append(line)
-    return '\n'.join(lines)
-
-
-def run_export(curl_file=None, mode=None, output_dir=None, browser_login=False, chrome_path=None):
-    if browser_login:
-        headers = browser_login_headers(chrome_path)
-    else:
-        curl_str = read_curl(curl_file)
-        headers = usable_headers(parse_curl(curl_str))
+def run_export(chrome_path=None):
+    headers = browser_login_headers(chrome_path)
     if not has_credentials(headers):
-        raise SystemExit("解析失败：未能从 cURL 中提取 token 或 cookie。")
+        raise SystemExit("未能获取本次登录会话。请在弹出的浏览器中完成登录后重试。")
 
     root = Path(__file__).resolve().parents[2]
-    defaults = {
-        'official': root / '02_原始资料库' / '官方题库',
-        'past': root / '02_原始资料库' / '真题原卷',
-        'mistakes': root / '04_题目训练库' / '错题',
-        'favorites': root / '02_原始资料库' / '收藏题库',
-        'notes': root / '02_原始资料库' / '笔记',
-    }
-    if mode is None:
-        print("请选择导出类型：1 错题本 2 收藏本 3 笔记 4 官方章节题库 5 历年真题")
-        mode = {'1': 'mistakes', '2': 'favorites', '3': 'notes', '4': 'official', '5': 'past'}.get(input('请输入数字: ').strip(), 'mistakes')
-    target = (root / output_dir).resolve() if output_dir and not Path(output_dir).is_absolute() else (Path(output_dir).expanduser().resolve() if output_dir else defaults[mode])
-    try:
-        target.relative_to(root)
-    except ValueError:
-        raise SystemExit("输出目录必须位于项目目录内: {}".format(root))
+    target = root / '04_题目训练库' / '错题'
     target.mkdir(parents=True, exist_ok=True)
-    if mode == 'official':
-        pull_official_bank(headers, str(target))
-    elif mode == 'past':
-        pull_past_exams(headers, str(target))
-    else:
-        mine = {'mistakes': ('01', '错题'), 'favorites': ('02', '收藏'), 'notes': ('03', '笔记')}[mode]
-        pull_personal_data(headers, mine[0], mine[1], str(target))
+    pull_personal_data(headers, '01', '错题', str(target))
     print("导出完成：{}".format(target))
 
 
 def main():
-    parser = argparse.ArgumentParser(description='竹马法考资料导出 CLI')
-    auth = parser.add_mutually_exclusive_group()
-    auth.add_argument('--curl-file', help='保存了浏览器 cURL 的文件；不提供时从标准输入读取')
-    auth.add_argument('--browser-login', action='store_true', help='打开临时浏览器，用户登录一次后自动获取本次会话')
-    parser.add_argument('--chrome-path', help='Chrome、Chromium 或 Edge 的可执行文件路径；仅与 --browser-login 一起使用')
-    parser.add_argument('--mode', choices=['mistakes', 'favorites', 'notes', 'official', 'past'], required=True, help='导出类型')
-    parser.add_argument('--output-dir', help='覆盖默认输出目录')
+    parser = argparse.ArgumentParser(description='导入你自己的竹马错题')
+    parser.add_argument('--chrome-path', help='Chrome、Chromium 或 Edge 的可执行文件路径')
     args = parser.parse_args()
-    if args.chrome_path and not args.browser_login:
-        parser.error('--chrome-path 只能与 --browser-login 一起使用')
-    run_export(args.curl_file, args.mode, args.output_dir, args.browser_login, args.chrome_path)
+    run_export(args.chrome_path)
 
 if __name__ == "__main__":
     main()

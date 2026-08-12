@@ -27,9 +27,7 @@
 *.pem
 .env
 .env.*
-curl.txt
 input_task.txt
-zhuma.json
 credentials.json
 *.credentials.json
 secrets.*
