@@ -25,7 +25,7 @@
 在项目根目录对 Agent 说：
 
 ```text
-读取 skills/fakao/SKILL.md，帮我初始化法考提分系统。
+/fakao 帮我初始化法考提分系统。
 我的目标是提高应试分数。
 ```
 
@@ -36,7 +36,7 @@
 优先给它最近的错题。对 Agent 说：
 
 ```text
-读取 skills/Fakao-Importer/SKILL.md，帮我导入并检查我的错题或真题。
+/Fakao-Importer 帮我导入并检查我的错题或真题。
 保留来源、法律版本和审核状态；不要改写原始资料。
 ```
 
@@ -45,7 +45,7 @@
 资料导入后说：
 
 ```text
-读取 skills/Fakao-Training-Session/SKILL.md，开始今天的逐题训练。
+/Fakao-Training-Session 开始今天的逐题训练。
 根据我的错题，识别反复错误的错因、考点和题型，生成错误专项训练和今天的任务。
 任务要包含原题重做、隔日复测和完成标准。
 ```
