@@ -7,6 +7,7 @@
 | `fakao` | 初始化用户档案、摸底和学习合同 |
 | `Fakao-Interaction-Protocol` | 统一低输入提问、选项和作答格式 |
 | `Fakao-Training-Session` | 逐题出题、追问、反馈、记录和掌握验收 |
+| `Fakao-Metrics` | 只用正确率、耗时、猜对比例和模拟成绩评估提分 |
 | `Fakao-Importer` | 资料解析、去重、来源与版本标记 |
 | `Fakao-Mistake-Diagnostician` | 识别可行动错因 |
 | `Fakao-Recall-Coach` | 主动回忆与间隔复测 |

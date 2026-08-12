@@ -414,7 +414,7 @@ def cmd_today(args):
     records = load_json(RECORD_DIR / "作答记录.json", [])
     wrong_ids = {r.get("question_id") for r in records if r.get("result") == "wrong"}
     wrong_ids.update(q["id"] for q in questions if q.get("is_imported_mistake"))
-    due = [q for q in questions if q["id"] in wrong_ids or (q.get("next_review") or "") <= date.today().isoformat()]
+    due = [q for q in questions if q["id"] in wrong_ids or (q.get("next_review") and q["next_review"] <= date.today().isoformat())]
     due = due[: max(1, min(20, args.limit))]
     tasks = [{"type": "review_question", "question_id": q["id"], "subject": q["subject"], "reason": "错题或到期复测", "estimated_minutes": 3} for q in due]
     if not tasks:
@@ -429,16 +429,39 @@ def cmd_review(args):
     question = questions.get(args.question_id)
     if not question:
         raise SystemExit("找不到题目: {}".format(args.question_id))
-    record = {"time": now(), "question_id": args.question_id, "subject": question["subject"], "result": args.result, "seconds": args.seconds, "confidence": args.confidence, "reason": args.reason}
+    previous_records = load_json(RECORD_DIR / "作答记录.json", [])
+    prior_issue = question.get("is_imported_mistake", False) or any(
+        row.get("question_id") == args.question_id
+        and (row.get("result") == "wrong" or row.get("confidence") in {"low", "guess"})
+        for row in previous_records
+    )
+    record = {
+        "time": now(),
+        "question_id": args.question_id,
+        "subject": question["subject"],
+        "result": args.result,
+        "seconds": args.seconds,
+        "confidence": args.confidence,
+        "reason": args.reason,
+        "source_type": args.source_type,
+        "training_stage": args.training_stage,
+        "knowledge_points": question.get("knowledge_points", []),
+        "independent": args.independent,
+        "looked_at_explanation": args.looked_at_explanation,
+    }
     path = RECORD_DIR / "作答记录.json"
-    records = load_json(path, [])
+    records = previous_records
     records.append(record)
     write_json(path, records)
     question["review_count"] = question.get("review_count", 0) + 1
     question["last_review"] = date.today().isoformat()
-    interval = 1 if args.result == "wrong" else min(14, 2 ** question["review_count"])
-    question["next_review"] = (date.today() + timedelta(days=interval)).isoformat()
-    question["status"] = "mastered" if args.result == "correct" and interval >= 4 else "reviewing"
+    if args.result == "correct" and args.confidence == "high" and args.independent and not prior_issue:
+        question["next_review"] = None
+        question["status"] = "correct_once"
+    else:
+        interval = 1 if args.result == "wrong" or args.confidence in {"low", "guess"} else min(14, 2 ** question["review_count"])
+        question["next_review"] = (date.today() + timedelta(days=interval)).isoformat()
+        question["status"] = "mastered" if args.result == "correct" and interval >= 4 else "reviewing"
     for json_file in question_files():
         items = load_json(json_file, [])
         changed = False
@@ -449,6 +472,38 @@ def cmd_review(args):
         if changed:
             write_json(json_file, items)
     print("已记录 {}，下次复测：{}".format(args.question_id, question["next_review"]))
+
+
+def cmd_metrics(args):
+    records = load_json(RECORD_DIR / "作答记录.json", [])
+    wrong_ids = {row.get("question_id") for row in records if row.get("result") == "wrong"}
+    remedial = [row for row in records if row.get("question_id") in wrong_ids]
+    variant = [row for row in records if row.get("source_type") == "variant"]
+    correct = [row for row in records if row.get("result") == "correct"]
+    timed = [row for row in records if isinstance(row.get("seconds"), (int, float)) and row.get("seconds", 0) > 0]
+    guessed = [row for row in correct if row.get("confidence") in {"low", "guess"} or row.get("reason") == "猜的"]
+
+    def rate(numerator, denominator):
+        return round(numerator / denominator, 4) if denominator else None
+
+    report = {
+        "generated_at": now(),
+        "sample_counts": {
+            "all_attempts": len(records),
+            "remedial_attempts": len(remedial),
+            "variant_attempts": len(variant),
+            "timed_attempts": len(timed),
+        },
+        "high_frequency_mistake_retest_accuracy": rate(sum(row.get("result") == "correct" for row in remedial), len(remedial)),
+        "unseen_variant_accuracy": rate(sum(row.get("result") == "correct" for row in variant), len(variant)),
+        "average_seconds": round(sum(row["seconds"] for row in timed) / len(timed), 2) if timed else None,
+        "correct_but_low_confidence_ratio": rate(len(guessed), len(correct)),
+        "simulation_score_change": None,
+        "notes": ["模拟成绩需要用户导入至少两次可比模拟记录。", "任何指标样本不足时都不能视为提分证据。"],
+    }
+    output = RECORD_DIR / "提分指标.json"
+    write_json(output, report)
+    print(json.dumps({"output": str(output.relative_to(ROOT)), "metrics": report}, ensure_ascii=False, indent=2))
 
 
 def cmd_cloud(args):
@@ -472,7 +527,7 @@ def build_parser():
     imp = sub.add_parser("import", help="导入用户资料并尝试解析 Markdown 题目")
     imp.add_argument("path")
     imp.set_defaults(func=cmd_import)
-    for name, func, help_text in [("inspect", cmd_inspect, "检查导入和题目状态"), ("index", cmd_index, "为已确认资料建立题目索引"), ("analyze", cmd_analyze, "分析近十年真题并生成预测候选"), ("diagnose", cmd_diagnose, "生成分科诊断"), ("error-analysis", cmd_error_analysis, "分析错误知识点和题型"), ("build-bank", cmd_build_bank, "生成个人专项题库"), ("error-attack", cmd_error_attack, "生成错误专项突击任务"), ("plan", cmd_plan, "根据错误和题库生成迭代计划"), ("today", cmd_today, "生成今日提分任务")]:
+    for name, func, help_text in [("inspect", cmd_inspect, "检查导入和题目状态"), ("index", cmd_index, "为已确认资料建立题目索引"), ("analyze", cmd_analyze, "分析近十年真题并生成预测候选"), ("diagnose", cmd_diagnose, "生成分科诊断"), ("error-analysis", cmd_error_analysis, "分析错误知识点和题型"), ("build-bank", cmd_build_bank, "生成个人专项题库"), ("error-attack", cmd_error_attack, "生成错误专项突击任务"), ("plan", cmd_plan, "根据错误和题库生成迭代计划"), ("today", cmd_today, "生成今日提分任务"), ("metrics", cmd_metrics, "生成提分指标周报")]:
         item = sub.add_parser(name, help=help_text)
         if name == "analyze":
             item.add_argument("--years", type=int, default=10)
@@ -489,6 +544,10 @@ def build_parser():
     review.add_argument("--seconds", type=int, default=0)
     review.add_argument("--confidence", choices=["low", "medium", "high"], default="medium")
     review.add_argument("--reason", default="")
+    review.add_argument("--source-type", choices=["original", "variant", "recall"], default="original")
+    review.add_argument("--training-stage", default="original_review")
+    review.add_argument("--independent", action=argparse.BooleanOptionalAction, default=True)
+    review.add_argument("--looked-at-explanation", action="store_true")
     review.set_defaults(func=cmd_review)
     cloud = sub.add_parser("cloud", help="通过 kuake 列出或下载待导入资料")
     cloud_sub = cloud.add_subparsers(dest="cloud_command", required=True)
