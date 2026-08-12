@@ -1,4 +1,4 @@
-# Fakao-Training-Session
+# fakao-training-session
 
 ## 目标
 
@@ -6,7 +6,7 @@
 
 ## 输入
 
-读取 `06_提分任务/今日任务`、`04_题目训练库`、`03_考点知识库`、`05_训练记录` 和 `skills/Fakao-Interaction-Protocol/SKILL.md`。
+读取 `06_提分任务/今日任务`、`04_题目训练库`、`03_考点知识库`、`05_训练记录` 和 `skills/fakao-interaction-protocol/SKILL.md`。每次出题前读取 `05_训练记录/训练会话状态.json`；每次记录作答后更新当前任务、题目 ID、阶段和下一步，因此中断后从未完成题继续，不重复已完成题。
 
 ## 一轮训练流程
 

@@ -1,4 +1,4 @@
-# Fakao-Personalized-Bank
+# fakao-personalized-bank
 
 ## 目标
 

@@ -1,4 +1,4 @@
-# Fakao-Planner
+# fakao-planner
 
 ## 目标
 

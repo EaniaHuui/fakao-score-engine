@@ -36,7 +36,7 @@
 优先给它最近的错题。对 Agent 说：
 
 ```text
-/Fakao-Importer 帮我导入并检查我的错题或真题。
+/fakao-importer 帮我导入并检查我的错题或真题。
 保留来源、法律版本和审核状态；不要改写原始资料。
 ```
 
@@ -45,7 +45,7 @@
 资料导入后说：
 
 ```text
-/Fakao-Training-Session 开始今天的逐题训练。
+/fakao-training-session 开始今天的逐题训练。
 根据我的错题，识别反复错误的错因、考点和题型，生成错误专项训练和今天的任务。
 任务要包含原题重做、隔日复测和完成标准。
 ```
@@ -68,15 +68,17 @@
 项目内 Skill 对应这个过程：
 
 - `fakao`：建立学习档案、时间容量和验收指标。
-- `Fakao-Interaction-Protocol`：统一低输入提问、选项和作答格式。
-- `Fakao-Training-Session`：逐题出题、追问、反馈、记录和掌握验收。
-- `Fakao-Importer`：导入并审核资料，不覆盖原文。
-- `Fakao-Mistake-Diagnostician`：区分不会规则、规则混淆、漏条件、审题、速度和策略问题。
-- `Fakao-Error-Attack-Coach`：把同类错误转成专项训练和复测。
-- `Fakao-Personalized-Bank`：从已确认题目中抽取当前薄弱点的有限题目。
-- `Fakao-Adaptive-Planner`：根据新作答记录调整下一轮计划。
+- `fakao-interaction-protocol`：统一低输入提问、选项和作答格式。
+- `fakao-training-session`：逐题出题、追问、反馈、记录和掌握验收。
+- `fakao-importer`：导入并审核资料，不覆盖原文。
+- `fakao-mistake-diagnostician`：区分不会规则、规则混淆、漏条件、审题、速度和策略问题。
+- `fakao-error-attack-coach`：把同类错误转成专项训练和复测。
+- `fakao-personalized-bank`：从已确认题目中抽取当前薄弱点的有限题目。
+- `fakao-adaptive-planner`：根据新作答记录调整下一轮计划。
 
 完整列表见 [skills/README.md](skills/README.md)。AI 生成的法律结论和变体题默认待审核，不能直接当作正式资料。
+
+完整的数据流和对话产物见 [匿名端到端示例](examples/end_to_end_example.md)。
 
 ## 目录地图
 
@@ -105,7 +107,7 @@ AI：答案错误。请选择主要原因：A 不会规则  B 规则混淆  C �
 AI：补充成立条件和例外，标注来源；安排原题重做和隔日变体复测。
 ```
 
-训练指标见 [Fakao-Metrics](skills/Fakao-Metrics/SKILL.md)：只看高频错题复测正确率、陌生变体正确率、平均答题时间、猜对比例和模拟成绩变化。运行 `./fakao metrics` 可生成本地周报；样本不足时不会假装有结论。
+训练指标见 [fakao-metrics](skills/fakao-metrics/SKILL.md)：只看高频错题复测正确率、陌生变体正确率、平均答题时间、猜对比例和模拟成绩变化。运行 `./fakao metrics` 可生成本地周报；样本不足时不会假装有结论。
 
 ## 资料来源
 
@@ -125,6 +127,7 @@ Skill 负责问诊、判断和解释；CLI 负责稳定地读写本地资料、�
 ./fakao error-attack
 ./fakao today
 ./fakao metrics
+./fakao mock-record --score 108 --total-questions 100 --seconds 10800
 ```
 
 记录一次复测：

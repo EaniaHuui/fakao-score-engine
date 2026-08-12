@@ -1,4 +1,4 @@
-# Fakao-Question-Trend-Analyst
+# fakao-question-trend-analyst
 
 ## 目标
 
@@ -17,4 +17,4 @@
 
 ## 输出
 
-输出“重点复习清单”：考点、证据、建议训练方式、预计耗时、优先级和审核状态，交给 `Fakao-Planner` 生成任务。
+输出“重点复习清单”：考点、证据、建议训练方式、预计耗时、优先级和审核状态，交给 `fakao-planner` 生成任务。

@@ -20,6 +20,7 @@ QUESTION_DIR = ROOT / "04_题目训练库" / "结构化真题"
 WRONG_DIR = ROOT / "04_题目训练库" / "错题"
 RECORD_DIR = ROOT / "05_训练记录"
 TASK_DIR = ROOT / "06_提分任务"
+MOCK_DIR = ROOT / "07_模拟考试"
 INBOX = ROOT / "01_待导入资料"
 BANK_DIR = ROOT / "04_题目训练库" / "个性化题库"
 
@@ -411,10 +412,7 @@ def cmd_error_attack(args):
 
 def cmd_today(args):
     questions = all_questions()
-    records = load_json(RECORD_DIR / "作答记录.json", [])
-    wrong_ids = {r.get("question_id") for r in records if r.get("result") == "wrong"}
-    wrong_ids.update(q["id"] for q in questions if q.get("is_imported_mistake"))
-    due = [q for q in questions if q["id"] in wrong_ids or (q.get("next_review") and q["next_review"] <= date.today().isoformat())]
+    due = [q for q in questions if q.get("next_review") and q["next_review"] <= date.today().isoformat()]
     due = due[: max(1, min(20, args.limit))]
     tasks = [{"type": "review_question", "question_id": q["id"], "subject": q["subject"], "reason": "错题或到期复测", "estimated_minutes": 3} for q in due]
     if not tasks:
@@ -476,16 +474,23 @@ def cmd_review(args):
 
 def cmd_metrics(args):
     records = load_json(RECORD_DIR / "作答记录.json", [])
-    wrong_ids = {row.get("question_id") for row in records if row.get("result") == "wrong"}
-    remedial = [row for row in records if row.get("question_id") in wrong_ids]
-    variant = [row for row in records if row.get("source_type") == "variant"]
+    prior_wrong = set()
+    remedial = []
+    for row in records:
+        question_id = row.get("question_id")
+        if question_id in prior_wrong:
+            remedial.append(row)
+        if row.get("result") == "wrong":
+            prior_wrong.add(question_id)
+    variant = [row for row in records if row.get("source_type") == "variant" and row.get("independent")]
     correct = [row for row in records if row.get("result") == "correct"]
     timed = [row for row in records if isinstance(row.get("seconds"), (int, float)) and row.get("seconds", 0) > 0]
     guessed = [row for row in correct if row.get("confidence") in {"low", "guess"} or row.get("reason") == "猜的"]
-
     def rate(numerator, denominator):
         return round(numerator / denominator, 4) if denominator else None
-
+    mocks = load_json(MOCK_DIR / "模拟记录.json", [])
+    comparable = [row for row in mocks if isinstance(row.get("score"), (int, float))]
+    simulation_change = round(comparable[-1]["score"] - comparable[-2]["score"], 2) if len(comparable) >= 2 else None
     report = {
         "generated_at": now(),
         "sample_counts": {
@@ -498,12 +503,28 @@ def cmd_metrics(args):
         "unseen_variant_accuracy": rate(sum(row.get("result") == "correct" for row in variant), len(variant)),
         "average_seconds": round(sum(row["seconds"] for row in timed) / len(timed), 2) if timed else None,
         "correct_but_low_confidence_ratio": rate(len(guessed), len(correct)),
-        "simulation_score_change": None,
-        "notes": ["模拟成绩需要用户导入至少两次可比模拟记录。", "任何指标样本不足时都不能视为提分证据。"],
+        "simulation_score_change": simulation_change,
+        "notes": ["复测正确率只统计某题首次错误之后的作答。", "任何指标样本不足时都不能视为提分证据。"],
     }
     output = RECORD_DIR / "提分指标.json"
     write_json(output, report)
     print(json.dumps({"output": str(output.relative_to(ROOT)), "metrics": report}, ensure_ascii=False, indent=2))
+
+
+def cmd_mock_record(args):
+    path = MOCK_DIR / "模拟记录.json"
+    records = load_json(path, [])
+    record = {
+        "date": args.date or date.today().isoformat(),
+        "score": args.score,
+        "total_questions": args.total_questions,
+        "seconds": args.seconds,
+        "source": args.source,
+        "notes": args.notes,
+    }
+    records.append(record)
+    write_json(path, records)
+    print(json.dumps(record, ensure_ascii=False, indent=2))
 
 
 def cmd_cloud(args):
@@ -538,6 +559,14 @@ def build_parser():
         if name == "today":
             item.add_argument("--limit", type=int, default=8)
         item.set_defaults(func=func)
+    mock = sub.add_parser("mock-record", help="记录一次模拟考试结果")
+    mock.add_argument("--score", type=float, required=True)
+    mock.add_argument("--total-questions", type=int, default=0)
+    mock.add_argument("--seconds", type=int, default=0)
+    mock.add_argument("--date")
+    mock.add_argument("--source", default="")
+    mock.add_argument("--notes", default="")
+    mock.set_defaults(func=cmd_mock_record)
     review = sub.add_parser("review", help="记录一次题目复测")
     review.add_argument("question_id")
     review.add_argument("--result", choices=["correct", "wrong"], required=True)

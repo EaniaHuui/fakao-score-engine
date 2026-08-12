@@ -1,4 +1,4 @@
-# Fakao-Variant-Generator
+# fakao-variant-generator
 
 ## 目标
 

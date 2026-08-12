@@ -1,4 +1,4 @@
-# Fakao-Recall-Coach
+# fakao-recall-coach
 
 ## 目标
 

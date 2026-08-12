@@ -1,4 +1,4 @@
-# Fakao-Adaptive-Planner
+# fakao-adaptive-planner
 
 ## 目标
 

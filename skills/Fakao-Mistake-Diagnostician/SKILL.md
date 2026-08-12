@@ -1,4 +1,4 @@
-# Fakao-Mistake-Diagnostician
+# fakao-mistake-diagnostician
 
 ## 目标
 
