@@ -24,22 +24,49 @@ TASK_DIR = ROOT / "06_提分任务"
 MOCK_DIR = ROOT / "07_模拟考试"
 INBOX = ROOT / "01_待导入资料"
 BANK_DIR = ROOT / "04_题目训练库" / "个性化题库"
+SUBJECT_CONFIG_DIR = ROOT / "_meta" / "科目配置"
 
-KNOWLEDGE_RULES = {
-    "刑法": {"犯罪构成": ["犯罪构成", "构成要件", "主观方面"], "正当防卫": ["正当防卫", "防卫过当"], "财产犯罪": ["盗窃", "抢劫", "诈骗", "侵占"], "共同犯罪": ["共同犯罪", "共犯"]},
-    "民法": {"合同": ["合同", "违约", "解除"], "物权": ["物权", "所有权", "善意取得", "担保物权"], "侵权责任": ["侵权", "损害赔偿", "过错责任"]},
-    "刑诉": {"证据": ["证据", "非法证据"], "强制措施": ["逮捕", "拘留", "取保候审", "强制措施"], "管辖": ["管辖", "立案", "侦查"], "审判程序": ["审判", "上诉", "抗诉"]},
-    "民诉": {"管辖": ["管辖", "级别管辖", "地域管辖"], "证据": ["证据", "举证", "证明"], "执行": ["执行", "执行程序"]},
-    "行政法": {"行政处罚": ["行政处罚", "处罚"], "行政复议": ["行政复议", "复议"], "行政诉讼": ["行政诉讼", "诉讼"], "行政行为": ["行政行为", "行政许可"]},
-    "理论法": {"法治思想": ["法治思想", "依法治国"], "法理学": ["法理", "法律原则", "法律规则"], "宪法": ["宪法", "基本权利"]},
-    "商经知": {"公司法": ["公司", "股东", "董事", "公司法"], "破产法": ["破产", "债权人会议"], "知识产权": ["商标", "专利", "著作权"]},
-    "三国法": {"国际私法": ["冲突规范", "准据法", "国际私法"], "国际经济法": ["WTO", "贸易", "国际货物"], "国际公法": ["国际法", "条约", "国籍"]},
+# 内置默认配置：_meta/科目配置/法考.json 缺失或损坏时的回退，保证零依赖克隆即用。
+_DEFAULT_SUBJECT_CONFIG = {
+    "exam_name": "国家统一法律职业资格考试",
+    "default_target_score": 108,
+    "subjects": ["刑法", "民法", "刑诉", "民诉", "行政法", "理论法", "商经知", "三国法"],
+    "subject_fallback_keywords": {"理论法": ["习近平法治思想", "法治思想", "法理学", "宪法"]},
+    "knowledge_rules": {
+        "刑法": {"犯罪构成": ["犯罪构成", "构成要件", "主观方面"], "正当防卫": ["正当防卫", "防卫过当"], "财产犯罪": ["盗窃", "抢劫", "诈骗", "侵占"], "共同犯罪": ["共同犯罪", "共犯"]},
+        "民法": {"合同": ["合同", "违约", "解除"], "物权": ["物权", "所有权", "善意取得", "担保物权"], "侵权责任": ["侵权", "损害赔偿", "过错责任"]},
+        "刑诉": {"证据": ["证据", "非法证据"], "强制措施": ["逮捕", "拘留", "取保候审", "强制措施"], "管辖": ["管辖", "立案", "侦查"], "审判程序": ["审判", "上诉", "抗诉"]},
+        "民诉": {"管辖": ["管辖", "级别管辖", "地域管辖"], "证据": ["证据", "举证", "证明"], "执行": ["执行", "执行程序"]},
+        "行政法": {"行政处罚": ["行政处罚", "处罚"], "行政复议": ["行政复议", "复议"], "行政诉讼": ["行政诉讼", "诉讼"], "行政行为": ["行政行为", "行政许可"]},
+        "理论法": {"法治思想": ["法治思想", "依法治国"], "法理学": ["法理", "法律原则", "法律规则"], "宪法": ["宪法", "基本权利"]},
+        "商经知": {"公司法": ["公司", "股东", "董事", "公司法"], "破产法": ["破产", "债权人会议"], "知识产权": ["商标", "专利", "著作权"]},
+        "三国法": {"国际私法": ["冲突规范", "准据法", "国际私法"], "国际经济法": ["WTO", "贸易", "国际货物"], "国际公法": ["国际法", "条约", "国籍"]},
+    },
+    "global_knowledge_rules": {
+        "环境法": ["环境保护法", "污染防治", "排污"],
+        "劳动法": ["劳动合同", "工伤", "用人单位"],
+        "监察法": ["监察机关", "监察法", "留置"],
+    },
 }
-GLOBAL_KNOWLEDGE_RULES = {
-    "环境法": ["环境保护法", "污染防治", "排污"],
-    "劳动法": ["劳动合同", "工伤", "用人单位"],
-    "监察法": ["监察机关", "监察法", "留置"],
-}
+
+
+def load_subject_config():
+    """读取 _meta/科目配置/法考.json；失败回退内置默认。"""
+    path = SUBJECT_CONFIG_DIR / "法考.json"
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(config, dict) and config.get("subjects"):
+            merged = dict(_DEFAULT_SUBJECT_CONFIG)
+            merged.update(config)
+            return merged
+    except (OSError, ValueError):
+        pass
+    return dict(_DEFAULT_SUBJECT_CONFIG)
+
+
+SUBJECT_CONFIG = load_subject_config()
+KNOWLEDGE_RULES = SUBJECT_CONFIG["knowledge_rules"]
+GLOBAL_KNOWLEDGE_RULES = SUBJECT_CONFIG["global_knowledge_rules"]
 
 
 def write_json(path, value):
@@ -76,13 +103,12 @@ def is_within(path, directory):
 
 
 def subject_from_text(text):
-    subjects = ["刑法", "民法", "刑诉", "民诉", "行政法", "理论法", "商经知", "三国法"]
-    for s in subjects:
+    for s in SUBJECT_CONFIG["subjects"]:
         if s in text:
             return s
-    for kw in ["习近平法治思想", "法治思想", "法理学", "宪法"]:
-        if kw in text:
-            return "理论法"
+    for subject, keywords in SUBJECT_CONFIG.get("subject_fallback_keywords", {}).items():
+        if any(kw in text for kw in keywords):
+            return subject
     return "未分类"
 
 
@@ -144,21 +170,27 @@ def parse_questions(path):
 
 def enrich_question(question):
     text = " ".join([question.get("title", ""), question.get("question", ""), " ".join(o.get("text", "") for o in question.get("options", []))])
-    question_type = re.search(r"(单选题|多选题|不定项选择题|判断题)", question.get("title", ""))
-    question["question_type"] = question_type.group(1) if question_type else "未标注"
-    subject_rules = KNOWLEDGE_RULES.get(question.get("subject"), {})
-    points = [point for point, keywords in subject_rules.items() if any(keyword in text for keyword in keywords)]
-    points.extend(point for point, keywords in GLOBAL_KNOWLEDGE_RULES.items() if any(keyword in text for keyword in keywords))
-    question["knowledge_points"] = points or ["待标注"]
+    if not question.get("question_type") or question["question_type"] == "未标注":
+        question_type = re.search(r"(单选题|多选题|不定项选择题|判断题)", question.get("title", ""))
+        question["question_type"] = question_type.group(1) if question_type else "未标注"
+    # A1：人工或 Agent 校正过的 knowledge_points 不被关键词匹配覆盖；
+    # 只在缺失或仍为默认占位时才用关键词规则填充。
+    existing_points = question.get("knowledge_points") or []
+    is_default = not existing_points or existing_points == ["待标注"]
+    if is_default:
+        subject_rules = KNOWLEDGE_RULES.get(question.get("subject"), {})
+        points = [point for point, keywords in subject_rules.items() if any(keyword in text for keyword in keywords)]
+        points.extend(point for point, keywords in GLOBAL_KNOWLEDGE_RULES.items() if any(keyword in text for keyword in keywords))
+        question["knowledge_points"] = points or ["待标注"]
     return question
 
 
 def cmd_init(args):
     profile = load_json(PROFILE, {})
     profile.update({
-        "exam": "国家统一法律职业资格考试",
+        "exam": SUBJECT_CONFIG["exam_name"],
         "exam_date": args.exam_date or profile.get("exam_date", ""),
-        "target_score": args.target_score if args.target_score is not None else profile.get("target_score", 108),
+        "target_score": args.target_score if args.target_score is not None else profile.get("target_score", SUBJECT_CONFIG["default_target_score"]),
         "daily_minutes": args.daily_minutes if args.daily_minutes is not None else profile.get("daily_minutes", 120),
         "created_at": profile.get("created_at", now()),
         "updated_at": now(),
@@ -361,57 +393,52 @@ def question_year(question):
     return int(match.group(0)) if match else None
 
 
-def recurring_terms(text):
-    # 无第三方分词依赖时，使用中文二至四字短语作为候选线索；结果必须人工复核。
-    text = re.sub(r"[^\u4e00-\u9fff]", "", text)
-    terms = []
-    for size in (2, 3, 4):
-        terms.extend(text[i:i + size] for i in range(len(text) - size + 1))
-    stop = {
-        "下列", "关于", "选项", "正确", "错误", "构成", "属于", "可以", "应当", "行为", "情形", "说法",
-        "的是", "哪一", "表述", "哪些", "是否", "某", "甲乙", "选项", "题目", "确的",
-    }
-    return [term for term in terms if len(term) == 4 and not any(token in term for token in stop)]
-
-
 def cmd_analyze(args):
+    # A3：基于已标注 knowledge_points 统计知识点×年份分布；
+    # 取代旧的子串频次伪分析（其输出为噪声，不可用于预测）。
     questions = all_questions()
     years = sorted({question_year(q) for q in questions if question_year(q)})
     selected_years = years[-args.years:]
     recent = [q for q in questions if question_year(q) in selected_years]
     subject_year = Counter((q["subject"], question_year(q)) for q in recent)
-    terms_by_subject = defaultdict(Counter)
-    years_by_term = defaultdict(lambda: defaultdict(set))
+    point_year = Counter()
+    point_questions = defaultdict(list)
+    untagged = 0
     for question in recent:
-        terms = set(recurring_terms(question.get("question", "")))
-        terms_by_subject[question["subject"]].update(terms)
-        for term in terms:
-            years_by_term[question["subject"]][term].add(question_year(question))
+        points = [p for p in question.get("knowledge_points", []) if p != "待标注"]
+        if not points:
+            untagged += 1
+        for point in points:
+            point_year[(question["subject"], point)] += 1
+            point_questions[(question["subject"], point)].append(question["id"])
     candidates = {
-        subject: [{"term": term, "question_count": count, "year_count": len(years_by_term[subject][term])}
-                  for term, count in counter.most_common(40)
-                  if count >= 3 and len(years_by_term[subject][term]) >= 2]
-        for subject, counter in terms_by_subject.items()
+        subject: [
+            {"knowledge_point": point, "question_count": count, "question_ids": point_questions[(subject, point)]}
+            for (subj, point), count in sorted(point_year.items(), key=lambda kv: (-kv[1], kv[0])) if subj == subject
+        ]
+        for (subject, _point), _count in point_year.items()
     }
     report = {
         "generated_at": now(),
-        "method": "近十年题目频次与跨年度出现线索；短语候选需映射到正式考点后才能用于预测",
+        "method": "统计已标注知识点 × 年份的题量分布；知识点标注质量决定分析质量，未标注题目不参与",
         "years": selected_years,
         "question_count": len(recent),
+        "untagged_count": untagged,
         "subject_year_count": {"{}-{}".format(subject, year): count for (subject, year), count in subject_year.items()},
-        "prediction_candidates": candidates,
-        "prediction_status": "heuristic_candidates_require_topic_review",
+        "knowledge_point_distribution": candidates,
     }
     output = ROOT / "03_考点知识库" / "考点索引" / "近十年真题分析.json"
     write_json(output, report)
-    markdown = ["# 近十年真题分析", "", "> 预测候选只表示频次线索，必须结合最新法规和人工审核，不代表押题结论。", "", "## 覆盖年份", "", ", ".join(map(str, selected_years)), "", "## 预测候选"]
-    for subject, terms in sorted(candidates.items()):
-        markdown.extend(["", "### {}".format(subject)])
-        markdown.extend("- {}（{} 道题，跨 {} 年）".format(item["term"], item["question_count"], item["year_count"]) for item in terms[:10])
+    markdown = ["# 近十年真题分析", "", "> 基于已标注知识点的频次分布，反映题量结构；不代表押题结论。", "", "## 覆盖年份", "", ", ".join(map(str, selected_years)), "", "## 题量分布（按知识点）", ""]
+    for subject in sorted(candidates):
+        markdown.append("### {}".format(subject))
+        for item in candidates[subject]:
+            markdown.append("- {}：{} 道题".format(item["knowledge_point"], item["question_count"]))
+        markdown.append("")
+    if untagged:
+        markdown.append("> 另有 {} 道题未标注知识点，未参与统计。".format(untagged))
     (output.with_suffix(".md")).write_text("\n".join(markdown) + "\n", encoding="utf-8")
-    print(json.dumps({"years": selected_years, "question_count": len(recent), "output": str(output.relative_to(ROOT))}, ensure_ascii=False, indent=2))
-
-
+    print(json.dumps({"years": selected_years, "question_count": len(recent), "untagged": untagged, "output": str(output.relative_to(ROOT))}, ensure_ascii=False, indent=2))
 def cmd_error_attack(args):
     analysis = load_json(RECORD_DIR / "错误分析.json", {}).get("groups", [])
     if not analysis:
@@ -425,13 +452,25 @@ def cmd_error_attack(args):
 
 def cmd_today(args):
     questions = all_questions()
+    profile = load_json(PROFILE, {})
+    budget = int(profile.get("daily_minutes", 120))
+    records = load_json(RECORD_DIR / "作答记录.json", [])
+    # A2：排序依据——错误次数降序（最危险优先），再按上次复习距今越久优先。
+    wrong_count = Counter(r.get("question_id") for r in records if r.get("result") == "wrong")
     due = [q for q in questions if q.get("next_review") and q["next_review"] <= date.today().isoformat()]
-    due = due[: max(1, min(20, getattr(args, "limit", 8)))]
-    tasks = [{"type": "review_question", "question_id": q["id"], "subject": q["subject"], "reason": "错题或到期复测", "estimated_minutes": 3} for q in due]
+    due.sort(key=lambda q: (-wrong_count.get(q["id"], 0), q.get("last_review") or ""))
+    limit = max(1, min(20, getattr(args, "limit", 8)))
+    tasks = []
+    used = 0
+    for q in due:
+        if len(tasks) >= limit or used + 3 > budget:
+            break
+        tasks.append({"type": "review_question", "question_id": q["id"], "subject": q["subject"], "wrong_count": wrong_count.get(q["id"], 0), "reason": "错题或到期复测", "estimated_minutes": 3})
+        used += 3
     if not tasks:
         tasks = [{"type": "diagnostic", "reason": "暂无复测数据，先完成摸底题", "estimated_minutes": 20}]
     output = TASK_DIR / "今日任务" / (date.today().isoformat() + ".json")
-    write_json(output, {"date": date.today().isoformat(), "tasks": tasks})
+    write_json(output, {"date": date.today().isoformat(), "daily_minutes": budget, "planned_minutes": sum(t["estimated_minutes"] for t in tasks), "tasks": tasks})
     print(json.dumps({"date": date.today().isoformat(), "tasks": tasks}, ensure_ascii=False, indent=2))
 
 
