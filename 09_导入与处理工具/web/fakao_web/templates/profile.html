@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% set active_page = 'profile' %}
+{% block title %}档案与模考{% endblock %}
+
+{% block content %}
+<section class="mb-8">
+  <h1 class="text-[24px] font-bold text-gray-900 tracking-tight">档案与模考</h1>
+  <p class="mt-1 text-[13px] text-gray-500">学习档案决定任务容量;模拟成绩是提分指标的最终校验。</p>
+</section>
+
+<div class="grid md:grid-cols-2 gap-6 items-start">
+
+  {# ── 学习档案 ── #}
+  <section>
+    <div class="bg-white rounded-card shadow-card p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[15px] font-semibold text-gray-900">学习档案</h2>
+          <p class="text-[12px] text-gray-400">保存后写入用户档案与学习合同</p>
+        </div>
+      </div>
+      <form id="profile-form" class="space-y-4">
+        <div>
+          <label class="block text-[13px] font-medium text-gray-700 mb-1.5">考试日期</label>
+          <input name="exam_date" type="date" value="{{ profile.get('exam_date', '') }}" class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+        </div>
+        <div>
+          <label class="block text-[13px] font-medium text-gray-700 mb-1.5">目标分数</label>
+          <input name="target_score" type="number" min="0" value="{{ profile.get('target_score', 108) }}" class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+          <p class="mt-1 text-[12px] text-gray-400">客观题全国合格线通常为 108 分(满分 180)</p>
+        </div>
+        <div>
+          <label class="block text-[13px] font-medium text-gray-700 mb-1.5">每日可用时间(分钟)</label>
+          <input name="daily_minutes" type="number" min="10" step="10" value="{{ profile.get('daily_minutes', 120) }}" class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+        </div>
+        <button type="submit" class="btn-spotlight w-full h-10 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110"><span>保存档案</span></button>
+        <p id="profile-msg" class="text-[13px] text-emerald-600 hidden">已保存。</p>
+      </form>
+    </div>
+  </section>
+
+  {# ── 模考记录 ── #}
+  <section>
+    <div class="bg-white rounded-card shadow-card p-6 mb-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[15px] font-semibold text-gray-900">录入模拟考试</h2>
+          <p class="text-[12px] text-gray-400">客观题总分 180,与真实考试同口径对比</p>
+        </div>
+      </div>
+      <form id="mock-form" class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[13px] font-medium text-gray-700 mb-1.5">分数</label>
+            <input name="score" type="number" min="0" max="180" step="0.5" required class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+          </div>
+          <div>
+            <label class="block text-[13px] font-medium text-gray-700 mb-1.5">题数</label>
+            <input name="total_questions" type="number" min="0" value="100" class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+          </div>
+          <div>
+            <label class="block text-[13px] font-medium text-gray-700 mb-1.5">用时(分钟)</label>
+            <input name="minutes" type="number" min="0" value="180" class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+          </div>
+          <div>
+            <label class="block text-[13px] font-medium text-gray-700 mb-1.5">日期</label>
+            <input name="date" type="date" class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+          </div>
+        </div>
+        <input name="source" placeholder="来源(如 竹马模考一),选填" class="w-full h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+        <button type="submit" class="btn-spotlight w-full h-10 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110"><span>记录这次模考</span></button>
+        <p id="mock-msg" class="text-[13px] text-emerald-600 hidden">已记录。</p>
+      </form>
+    </div>
+
+    <div class="bg-white rounded-card shadow-card p-6">
+      <h2 class="text-[15px] font-semibold text-gray-900 mb-4">历次模考</h2>
+      {% if mocks %}
+      <div class="space-y-2">
+        {% for m in mocks | reverse %}
+        <div class="flex items-center gap-3 p-3 rounded-input bg-gray-50">
+          <span class="text-[14px] font-semibold text-gray-900 w-12">{{ m.score }}</span>
+          <span class="text-[13px] text-gray-400">{{ m.date or '—' }}</span>
+          {% if m.source %}<span class="badge badge-blue">{{ m.source }}</span>{% endif %}
+          <span class="ml-auto text-[12px] text-gray-400">{{ (m.seconds // 60) if m.seconds else '—' }} 分钟</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="py-8 text-center">
+        <svg class="size-8 text-gray-300 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <p class="mt-3 text-[14px] text-gray-400">还没有模考记录</p>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+<script>
+const conf = {headers: {'Content-Type': 'application/json'}};
+document.getElementById('profile-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  await fetch('/api/profile', {method: 'POST', body: JSON.stringify(Object.fromEntries(fd)), ...conf});
+  document.getElementById('profile-msg').classList.remove('hidden');
+});
+document.getElementById('mock-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const minutes = parseInt(fd.get('minutes') || '0', 10);
+  const body = Object.fromEntries(fd);
+  body.seconds = minutes * 60;
+  delete body.minutes;
+  const res = await fetch('/api/mock', {method: 'POST', body: JSON.stringify(body), ...conf});
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById('mock-msg').classList.remove('hidden');
+    setTimeout(() => location.reload(), 600);
+  }
+});
+</script>
+{% endblock %}

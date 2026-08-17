@@ -5,6 +5,7 @@ import argparse
 from collections import Counter, defaultdict
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -43,7 +44,9 @@ GLOBAL_KNOWLEDGE_RULES = {
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def load_json(path, default):
@@ -225,7 +228,11 @@ def all_questions():
         result.extend(parse_questions(path))
     unique = {}
     for question in result:
-        unique[question.get("fingerprint") or question["id"]] = question
+        key = question.get("fingerprint") or question["id"]
+        # first-wins：结构化 json（含持久化的错题复测状态）先读入，
+        # 不能被错题 md 的实时解析结果覆盖，否则复测排期丢失。
+        if key not in unique:
+            unique[key] = question
     return list(unique.values())
 
 
@@ -428,44 +435,47 @@ def cmd_today(args):
     print(json.dumps({"date": date.today().isoformat(), "tasks": tasks}, ensure_ascii=False, indent=2))
 
 
-def cmd_review(args):
+def record_review(question_id, result, seconds=0, confidence="medium", reason="",
+                  source_type="original", training_stage="original_review",
+                  independent=True, looked_at_explanation=False):
+    """记录一次作答并更新复测排期；供 CLI 与 Web 共用。失败返回 {"ok": False, "error"}。"""
     questions = {q["id"]: q for q in all_questions()}
-    question = questions.get(args.question_id)
+    question = questions.get(question_id)
     if not question:
-        raise SystemExit("找不到题目: {}".format(args.question_id))
+        return {"ok": False, "error": "找不到题目: {}".format(question_id)}
     previous_records = load_json(RECORD_DIR / "作答记录.json", [])
     prior_issue = question.get("is_imported_mistake", False) or any(
-        row.get("question_id") == args.question_id
+        row.get("question_id") == question_id
         and (row.get("result") == "wrong" or row.get("confidence") in {"low", "guess"})
         for row in previous_records
     )
     record = {
         "time": now(),
-        "question_id": args.question_id,
+        "question_id": question_id,
         "subject": question["subject"],
-        "result": args.result,
-        "seconds": args.seconds,
-        "confidence": args.confidence,
-        "reason": args.reason,
-        "source_type": args.source_type,
-        "training_stage": args.training_stage,
+        "result": result,
+        "seconds": seconds,
+        "confidence": confidence,
+        "reason": reason,
+        "source_type": source_type,
+        "training_stage": training_stage,
         "knowledge_points": question.get("knowledge_points", []),
-        "independent": args.independent,
-        "looked_at_explanation": args.looked_at_explanation,
+        "independent": independent,
+        "looked_at_explanation": looked_at_explanation,
     }
-    path = RECORD_DIR / "作答记录.json"
     records = previous_records
     records.append(record)
-    write_json(path, records)
+    write_json(RECORD_DIR / "作答记录.json", records)
     question["review_count"] = question.get("review_count", 0) + 1
     question["last_review"] = date.today().isoformat()
-    if args.result == "correct" and args.confidence == "high" and args.independent and not prior_issue:
+    if result == "correct" and confidence == "high" and independent and not prior_issue:
         question["next_review"] = None
         question["status"] = "correct_once"
     else:
-        interval = 1 if args.result == "wrong" or args.confidence in {"low", "guess"} else min(14, 2 ** question["review_count"])
+        interval = 1 if result == "wrong" or confidence in {"low", "guess"} else min(14, 2 ** question["review_count"])
         question["next_review"] = (date.today() + timedelta(days=interval)).isoformat()
-        question["status"] = "mastered" if args.result == "correct" and interval >= 4 else "reviewing"
+        question["status"] = "mastered" if result == "correct" and interval >= 4 else "reviewing"
+    updated = False
     for json_file in question_files():
         items = load_json(json_file, [])
         changed = False
@@ -475,7 +485,26 @@ def cmd_review(args):
                 changed = True
         if changed:
             write_json(json_file, items)
-    print("已记录 {}，下次复测：{}".format(args.question_id, question["next_review"]))
+            updated = True
+    if not updated and "错题" in question.get("source_file", ""):
+        # 来自错题 Markdown 的题目不在任何结构化 json 里；把复测状态持久化，
+        # 否则每次重新解析 md 会丢失 next_review（错题会永远出现在今日任务）。
+        source_stem = Path(question["source_file"]).stem
+        output = QUESTION_DIR / "错题状态_{}.json".format(source_stem)
+        items = [item for item in load_json(output, []) if item.get("id") != question["id"]]
+        items.append(question)
+        write_json(output, items)
+    return {"ok": True, "question_id": question_id, "next_review": question["next_review"], "status": question["status"]}
+
+
+def cmd_review(args):
+    outcome = record_review(
+        args.question_id, args.result, args.seconds, args.confidence, args.reason,
+        args.source_type, args.training_stage, args.independent, args.looked_at_explanation,
+    )
+    if not outcome["ok"]:
+        raise SystemExit(outcome["error"])
+    print("已记录 {}，下次复测：{}".format(args.question_id, outcome["next_review"]))
 
 
 def cmd_metrics(args):
@@ -543,24 +572,52 @@ def cmd_cloud(args):
     raise SystemExit(subprocess.run(command, cwd=str(ROOT), check=False).returncode)
 
 
-def cmd_zhuma(args):
+def run_zhuma(action, chrome_path=None):
+    """运行竹马导入脚本；返回 {"returncode", "stdout", "stderr", "exported"}。供 CLI 与 Web 共用。"""
     script = Path(__file__).with_name("竹马全自动导出神器.py")
-    action = getattr(args, "action", None) or "auto"
     command = [sys.executable, str(script), action]
-    if args.chrome_path:
-        command.extend(["--chrome-path", args.chrome_path])
+    if chrome_path:
+        command.extend(["--chrome-path", chrome_path])
     completed = subprocess.run(command, cwd=str(ROOT), check=False, capture_output=True, text=True)
-    if completed.stdout:
-        print(completed.stdout, end="")
-    if completed.stderr:
-        print(completed.stderr, end="", file=sys.stderr)
-    if completed.returncode:
-        raise SystemExit(completed.returncode)
+    return {
+        "returncode": completed.returncode,
+        "stdout": completed.stdout or "",
+        "stderr": completed.stderr or "",
+        "exported": "错题导出完成" in (completed.stdout or ""),
+    }
+
+
+def cmd_zhuma(args):
+    action = getattr(args, "action", None) or "auto"
+    outcome = run_zhuma(action, args.chrome_path)
+    if outcome["stdout"]:
+        print(outcome["stdout"], end="")
+    if outcome["stderr"]:
+        print(outcome["stderr"], end="", file=sys.stderr)
+    if outcome["returncode"]:
+        raise SystemExit(outcome["returncode"])
     # 仅当脚本实际完成错题导出（出现成功标记）时才继续错误分析与今日任务；
     # open / 等待登录等分支没有该标记，不会误触发。
-    if action in ("login", "auto") and "错题导出完成" in completed.stdout:
+    if action in ("login", "auto") and outcome["exported"]:
         cmd_error_analysis(args)
         cmd_today(args)
+
+
+def cmd_ui(args):
+    server = Path(__file__).with_name("web") / "server.py"
+    if not server.exists():
+        raise SystemExit("缺少 Web 组件，请更新仓库。")
+    try:
+        import flask  # noqa: F401
+    except ImportError:
+        raise SystemExit(
+            "Web 工作台需要 Flask：\n"
+            "    pip3 install -r 09_导入与处理工具/web/requirements.txt\n"
+            "（核心 CLI 功能仍零依赖，不受影响）"
+        )
+    raise SystemExit(subprocess.run(
+        [sys.executable, str(server), "--host", args.host, "--port", str(args.port)],
+        cwd=str(ROOT), check=False).returncode)
 
 
 def build_parser():
@@ -579,6 +636,10 @@ def build_parser():
                        help="auto=有会话直接导出否则打开浏览器 open=打开浏览器 login=登录后导出 close=关闭浏览器")
     zhuma.add_argument("--chrome-path", help="Chrome、Chromium 或 Edge 的可执行文件路径")
     zhuma.set_defaults(func=cmd_zhuma)
+    ui = sub.add_parser("ui", help="启动本地 Web 工作台")
+    ui.add_argument("--host", default="127.0.0.1")
+    ui.add_argument("--port", type=int, default=7800)
+    ui.set_defaults(func=cmd_ui)
     for name, func, help_text in [("inspect", cmd_inspect, "检查导入和题目状态"), ("index", cmd_index, "为已确认资料建立题目索引"), ("analyze", cmd_analyze, "分析近十年真题并生成预测候选"), ("diagnose", cmd_diagnose, "生成分科诊断"), ("error-analysis", cmd_error_analysis, "分析错误知识点和题型"), ("build-bank", cmd_build_bank, "生成个人专项题库"), ("error-attack", cmd_error_attack, "生成错误专项突击任务"), ("plan", cmd_plan, "根据错误和题库生成迭代计划"), ("today", cmd_today, "生成今日提分任务"), ("metrics", cmd_metrics, "生成提分指标周报")]:
         item = sub.add_parser(name, help=help_text)
         if name == "analyze":
@@ -602,7 +663,7 @@ def build_parser():
     review.add_argument("question_id")
     review.add_argument("--result", choices=["correct", "wrong"], required=True)
     review.add_argument("--seconds", type=int, default=0)
-    review.add_argument("--confidence", choices=["low", "medium", "high"], default="medium")
+    review.add_argument("--confidence", choices=["low", "medium", "high", "guess"], default="medium")
     review.add_argument("--reason", default="")
     review.add_argument("--source-type", choices=["original", "variant", "recall"], default="original")
     review.add_argument("--training-stage", default="original_review")

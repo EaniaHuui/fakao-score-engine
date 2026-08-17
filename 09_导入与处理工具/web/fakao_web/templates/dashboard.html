@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% set active_page = 'dashboard' %}
+{% block title %}概览{% endblock %}
+
+{% block content %}
+{# ── Hero 横幅(Law 1:渐变 + 密度 + CTA) ── #}
+<section class="mb-8">
+  <div class="relative overflow-hidden rounded-card bg-gradient-to-br from-brand-dark via-brand to-indigo-500 text-white shadow-[0_10px_30px_-8px_rgba(37,99,235,0.45)]">
+    <div class="absolute inset-0 opacity-[0.15]" style="background-image:radial-gradient(circle at 1px 1px, white 1px, transparent 0);background-size:24px 24px"></div>
+    <div class="absolute -right-16 -top-20 w-72 h-72 rounded-full" style="background:radial-gradient(circle,rgba(255,255,255,0.25),transparent 70%)"></div>
+    <div class="relative p-8">
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 mb-3 bg-white/15 rounded-full text-[11px] font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-300 pulse-soft"></span>
+        今日训练待开始
+      </div>
+      <h1 class="text-[28px] font-bold tracking-tight leading-tight">把反复的错题,变成今天的提分任务</h1>
+      <p class="mt-2.5 text-[14px] text-blue-50/90 max-w-lg leading-relaxed">
+        {% if profile.get('target_score') %}目标 {{ profile.get('target_score') }} 分 · 每日 {{ profile.get('daily_minutes', 120) }} 分钟 · {% endif %}从到期复测开始,只做有限的高收益题目。
+      </p>
+      <div class="flex items-center gap-6 mt-6">
+        <a href="/train" class="btn-spotlight inline-flex items-center gap-2 px-5 h-10 rounded-btn bg-white text-brand-dark text-[13px] font-semibold hover:brightness-105">
+          <span>开始训练</span>
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+        <div class="flex items-center gap-6">
+          <div><p class="text-[26px] font-bold leading-none">{{ due_count }}</p><p class="text-[11px] text-blue-100/80 mt-1">今日待复测</p></div>
+          <div class="w-px h-8 bg-white/20"></div>
+          <div><p class="text-[26px] font-bold leading-none">{{ total_questions }}</p><p class="text-[11px] text-blue-100/80 mt-1">可训练题目</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ── KPI 行(Archetype 6:白卡 + 彩色图标,无边条) ── #}
+<section class="mb-8">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-stretch">
+    {% set kpis = [
+      (due_count, '今日待复测', 'blue', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', '题'),
+      (total_questions, '可训练题目', 'emerald', '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>', '题'),
+      ((metrics.get('average_seconds') or '—'), '平均答题耗时', 'amber', '<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/>', '秒' if metrics.get('average_seconds') else ''),
+      ((metrics.get('high_frequency_mistake_retest_accuracy') and (metrics['high_frequency_mistake_retest_accuracy'] * 100) | round(0) | int ~ '%' or '—'), '错题复测正确率', 'purple', '<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>', ''),
+    ] %}
+    {% for value, label, color, icon, unit in kpis %}
+    <div class="spotlight bg-white rounded-card shadow-card p-5 flex flex-col">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-{{ color }}-50 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-{{ color }}-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ icon | safe }}</svg>
+        </div>
+        <p class="text-[13px] text-gray-500">{{ label }}</p>
+      </div>
+      <p class="mt-3 text-[26px] font-bold text-gray-900 leading-none">{{ value }}{% if unit %} <span class="text-[13px] font-normal text-gray-400">{{ unit }}</span>{% endif %}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# ── 今日任务 ── #}
+<section class="mb-8">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h2 class="text-[16px] font-semibold text-gray-900">今日任务</h2>
+      <p class="mt-0.5 text-[13px] text-gray-500">来自到期复测和错误专项,由作答数据动态排序</p>
+    </div>
+    <a href="/reports" class="icon-nudge inline-flex items-center gap-1 text-[13px] text-brand-dark font-medium hover:underline">
+      查看全部报告
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    </a>
+  </div>
+  {% if today_tasks %}
+  <div class="bg-white rounded-card shadow-card overflow-hidden">
+    <table class="w-full">
+      <thead>
+        <tr class="bg-gray-50 text-left text-[12px] text-gray-500">
+          <th class="px-5 py-3 font-medium">类型</th>
+          <th class="px-5 py-3 font-medium">说明</th>
+          <th class="px-5 py-3 font-medium text-right">预计用时</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in today_tasks %}
+        <tr class="tbl-row border-t border-gray-100 text-[13px]">
+          <td class="px-5 py-3">
+            {% if task.get('question_id') %}
+              <span class="badge badge-blue">复测</span>
+            {% elif task.get('type') == 'diagnostic' %}
+              <span class="badge badge-amber">摸底</span>
+            {% else %}
+              <span class="badge badge-gray">{{ task.get('type', '任务') }}</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-3 text-gray-700">
+            {% if task.get('question_id') %}
+              {{ task.get('subject', '') }} · {{ task.get('question_id') }} — {{ task.get('reason', '') }}
+            {% else %}
+              {{ task.get('reason', '') }}
+            {% endif %}
+          </td>
+          <td class="px-5 py-3 text-right text-gray-500">{{ task.get('estimated_minutes', '') }} 分钟</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-card shadow-card py-12 text-center">
+    <svg class="size-8 text-gray-300 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    <p class="mt-3 text-[14px] text-gray-400">还没有今日任务。先导入错题或真题,再生成任务。</p>
+    <a href="/zhuma" class="inline-flex items-center gap-2 mt-4 px-4 h-9 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110"><span>去导入错题</span></a>
+  </div>
+  {% endif %}
+</section>
+
+{# ── 分科统计 ── #}
+{% if subjects %}
+<section class="mb-8">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h2 class="text-[16px] font-semibold text-gray-900">题库分科</h2>
+      <p class="mt-0.5 text-[13px] text-gray-500">当前可用于训练的题目分布</p>
+    </div>
+  </div>
+  <div class="bg-white rounded-card shadow-card p-6">
+    {% set max_count = subjects.values() | max %}
+    {% for subject, count in subjects.items() %}
+    <div class="flex items-center gap-4 py-2">
+      <span class="w-20 text-right text-[13px] text-gray-600 shrink-0">{{ subject }}</span>
+      <div class="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div class="h-full rounded-full bg-gradient-to-r from-brand to-brand-dark" style="width: {{ (count / max_count * 100) | round(1) }}%"></div>
+      </div>
+      <span class="w-10 text-[13px] font-medium text-gray-700">{{ count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

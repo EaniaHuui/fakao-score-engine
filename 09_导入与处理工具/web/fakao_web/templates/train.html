@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% set active_page = 'train' %}
+{% block title %}逐题训练{% endblock %}
+
+{% block content %}
+<section class="mb-8">
+  <h1 class="text-[24px] font-bold text-gray-900 tracking-tight">逐题训练</h1>
+  <p class="mt-1 text-[13px] text-gray-500">一次只做一道题。高信心答对只记录;答错或低信心会追问错因,进入强化与间隔复测。</p>
+</section>
+
+<div id="train-root">
+
+  {# ── 开始/恢复区 ── #}
+  <div id="start-panel" class="hidden">
+    {% if resumable %}
+    <div class="bg-white rounded-card shadow-card p-6 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[15px] font-semibold text-gray-900">有未完成的训练</h2>
+          <p class="text-[13px] text-gray-500">第 {{ resumable.index + 1 }} / {{ resumable.queue | length }} 题,从中断处继续,已完成题不重复。</p>
+        </div>
+      </div>
+      <div class="flex gap-3 mt-4">
+        <button id="resume-btn" class="btn-spotlight h-10 px-5 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110"><span>继续训练</span></button>
+        <button id="abort-btn" class="h-10 px-5 rounded-btn bg-white border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50">放弃本轮</button>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="bg-white rounded-card shadow-card p-6">
+      <h2 class="text-[15px] font-semibold text-gray-900 mb-1">开始新训练</h2>
+      <p class="text-[13px] text-gray-500 mb-5">选择题目来源与数量</p>
+      <div class="grid md:grid-cols-3 gap-4 mb-5">
+        {% set sources = [
+          ('today', '到期复测', 'blue', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', '错题或到期复测的题,最高收益'),
+          ('wrong', '全部错题', 'red', '<path d="m18 6-12 12"/><path d="m6 6 12 12"/>', '把导入的全部错题过一遍'),
+          ('subject', '按科目', 'emerald', '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>', '选定一个科目专项训练'),
+        ] %}
+        {% for value, label, color, icon, desc in sources %}
+        <label class="src-card cursor-pointer bg-gradient-to-br from-{{ color }}-50 to-{{ color }}-50 border border-{{ color }}-100 rounded-card p-5 hover:shadow-card-hover transition-base">
+          <input type="radio" name="source" value="{{ value }}" class="hidden" {{ 'checked' if value == 'today' }}>
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 rounded-lg bg-white flex items-center justify-center">
+              <svg class="w-4.5 h-4.5 text-{{ color }}-500" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ icon | safe }}</svg>
+            </div>
+            <span class="text-[14px] font-semibold text-gray-900">{{ label }}</span>
+          </div>
+          <p class="text-[12px] text-gray-500">{{ desc }}</p>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="flex flex-wrap items-center gap-4">
+        <div id="subject-wrap" class="hidden items-center gap-2 flex">
+          <label class="text-[13px] text-gray-600">科目</label>
+          <select id="subject-select" class="h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+            {% for s in subjects %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-[13px] text-gray-600">题数</label>
+          <select id="limit-select" class="h-9 px-3 rounded-input bg-white border border-gray-200 text-[14px] text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/15 hover:border-gray-300">
+            <option value="6">6 题</option><option value="8" selected>8 题</option><option value="12">12 题</option><option value="20">20 题</option>
+          </select>
+        </div>
+        <button id="start-btn" class="btn-spotlight ml-auto h-10 px-6 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110"><span>开始训练</span></button>
+      </div>
+    </div>
+  </div>
+
+  {# ── 做题区 ── #}
+  <div id="quiz-panel" class="hidden">
+    <div class="flex items-center justify-between mb-4">
+      <p id="progress-text" class="text-[14px] font-medium text-gray-700">第 1 / 8 题</p>
+      <div class="flex items-center gap-3">
+        <span id="timer" class="badge badge-gray"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span id="timer-text">0:00</span></span>
+        <button id="skip-btn" class="h-8 px-3 rounded-btn bg-white border border-gray-200 text-[12px] text-gray-500 hover:bg-gray-50">跳过</button>
+      </div>
+    </div>
+    <div class="w-full h-1.5 rounded-full bg-gray-100 mb-6 overflow-hidden">
+      <div id="progress-bar" class="h-full rounded-full bg-gradient-to-r from-brand to-brand-dark transition-all" style="width:0%"></div>
+    </div>
+
+    <div class="bg-white rounded-card shadow-card p-6 mb-6">
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span id="q-subject" class="badge badge-blue"></span>
+        <span id="q-type" class="badge badge-gray"></span>
+        <span id="q-points" class="badge badge-purple"></span>
+      </div>
+      <p id="q-text" class="text-[15px] text-gray-900 leading-relaxed whitespace-pre-wrap"></p>
+      <div id="q-options" class="mt-5 space-y-2"></div>
+    </div>
+
+    <div id="confidence-zone">
+      <p class="text-[13px] font-medium text-gray-700 mb-2.5">这题你的信心是?</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {% set confs = [('high','高','blue'),('medium','中','emerald'),('low','低','amber'),('guess','猜的','red')] %}
+        {% for value, label, color in confs %}
+        <button data-conf="{{ value }}" class="conf-btn h-10 rounded-btn bg-white border border-gray-200 text-[13px] font-medium text-gray-700 hover:border-{{ color }}-300 hover:text-{{ color }}-600 hover:bg-{{ color }}-50 transition-base">{{ label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── 判分反馈 ── #}
+    <div id="feedback-zone" class="hidden">
+      <div id="feedback-card" class="rounded-card p-6 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span id="fb-icon" class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"></span>
+          <div>
+            <p id="fb-title" class="text-[16px] font-bold"></p>
+            <p id="fb-sub" class="text-[13px]"></p>
+          </div>
+        </div>
+        <p class="text-[13px] text-gray-600 mb-4">正确答案:<span id="fb-answers" class="font-semibold"></span></p>
+        <div id="fb-options"></div>
+      </div>
+
+      <div id="reason-zone" class="bg-white rounded-card shadow-card p-6 mb-6">
+        <p class="text-[14px] font-semibold text-gray-900 mb-1">主要原因是什么?</p>
+        <p class="text-[13px] text-gray-500 mb-4">用于错误分析和专项训练,如实选择即可</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          {% for r in reasons %}
+          <button data-reason="{{ r }}" class="reason-btn h-10 rounded-btn bg-white border border-gray-200 text-[13px] font-medium text-gray-700 hover:border-brand-300 hover:text-brand-dark hover:bg-brand-softer transition-base">{{ r }}</button>
+          {% endfor %}
+        </div>
+        <button id="submit-btn" class="btn-spotlight h-10 px-6 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" disabled><span>提交,下一题</span></button>
+      </div>
+
+      <div id="next-zone" class="hidden">
+        <button id="next-btn" class="btn-spotlight h-10 px-6 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110"><span>下一题</span></button>
+      </div>
+    </div>
+  </div>
+
+  {# ── 完成总结 ── #}
+  <div id="done-panel" class="hidden">
+    <div class="relative overflow-hidden rounded-card bg-gradient-to-br from-brand-dark via-brand to-indigo-500 text-white shadow-[0_10px_30px_-8px_rgba(37,99,235,0.45)] mb-8">
+      <div class="absolute inset-0 opacity-[0.15]" style="background-image:radial-gradient(circle at 1px 1px, white 1px, transparent 0);background-size:24px 24px"></div>
+      <div class="relative p-8">
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 mb-3 bg-white/15 rounded-full text-[11px] font-medium">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-300 pulse-soft"></span>本轮完成
+        </div>
+        <h1 class="text-[28px] font-bold tracking-tight">本轮训练完成</h1>
+        <p class="mt-2.5 text-[14px] text-blue-50/90 max-w-lg leading-relaxed" id="done-summary"></p>
+        <p class="mt-2 text-[13px] text-blue-100/80">答错的题已排入明天复测;在分析报告页查看错误聚类。</p>
+        <div class="flex items-center gap-4 mt-6">
+          <a href="/train" class="inline-flex items-center gap-2 px-5 h-10 rounded-btn bg-white text-brand-dark text-[13px] font-semibold hover:brightness-105"><span>再来一轮</span></a>
+          <a href="/reports" class="inline-flex items-center gap-2 px-5 h-10 rounded-btn bg-white/15 text-white text-[13px] font-semibold hover:bg-white/25"><span>查看报告</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const conf = {headers: {'Content-Type': 'application/json'}};
+let q = null;           // 当前题(白名单投影,无答案)
+let answered = false;   // 是否已判分
+let selected = [];
+let timerInt = null, seconds = 0, timerRunning = false;
+
+function resetTimer() { clearInterval(timerInt); seconds = 0; $('timer-text').textContent = '0:00'; }
+function startTimer() {
+  if (timerRunning) return; timerRunning = true;
+  timerInt = setInterval(() => { seconds++; $('timer-text').textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0'); }, 1000);
+}
+function stopTimer() { timerRunning = false; clearInterval(timerInt); }
+
+function show(panel) {
+  ['start-panel', 'quiz-panel', 'done-panel'].forEach(p => $(p).classList.add('hidden'));
+  $(panel).classList.remove('hidden');
+}
+
+async function loadCurrent() {
+  const res = await fetch('/api/train/current');
+  const data = await res.json();
+  if (!data.ok) { location.reload(); return; }
+  q = data.question; answered = false; selected = [];
+  $('progress-text').textContent = `第 ${q.index} / ${q.total} 题`;
+  $('progress-bar').style.width = ((q.index - 1) / q.total * 100) + '%';
+  $('q-subject').textContent = q.subject;
+  $('q-type').textContent = q.question_type || '未标注题型';
+  $('q-points').textContent = (q.knowledge_points || []).join('、') || '待标注';
+  $('q-text').textContent = q.question || q.title;
+  const opts = $('q-options'); opts.innerHTML = '';
+  const inputType = q.multi ? 'checkbox' : 'radio';
+  q.options.forEach(o => {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn w-full flex items-start gap-3 p-3.5 rounded-input bg-white border border-gray-200 text-left hover:border-brand-300 hover:bg-brand-softer transition-base';
+    btn.innerHTML = `<span class="opt-id w-6 h-6 shrink-0 rounded-btn border border-gray-200 flex items-center justify-center text-[12px] font-semibold text-gray-500">${o.id}</span>
+                     <span class="text-[14px] text-gray-800 leading-relaxed">${o.text.replace(/</g,'&lt;')}</span>`;
+    btn.onclick = () => {
+      if (answered) return;
+      if (inputType === 'radio') {
+        opts.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('!border-brand', '!bg-brand-softer'));
+        opts.querySelectorAll('.opt-id').forEach(i => { i.classList.remove('!border-brand','!bg-brand','!text-white'); });
+        selected = [o.id];
+      } else {
+        const i = selected.indexOf(o.id);
+        if (i >= 0) { selected.splice(i, 1); } else { selected.push(o.id); }
+      }
+      btn.classList.toggle('!border-brand', selected.includes(o.id));
+      const idEl = btn.querySelector('.opt-id');
+      idEl.classList.toggle('!border-brand', selected.includes(o.id));
+      idEl.classList.toggle('!bg-brand', selected.includes(o.id));
+      idEl.classList.toggle('!text-white', selected.includes(o.id));
+    };
+    opts.appendChild(btn);
+  });
+  $('confidence-zone').classList.remove('hidden');
+  $('feedback-zone').classList.add('hidden');
+  show('quiz-panel');
+  resetTimer(); startTimer();
+
+  // 恢复“已判分未提交”的中间态:直接进入错因追问
+  if (q.pending_answer) {
+    selected = q.pending_answer.selected || [];
+    renderFeedback({result: q.pending_answer.result, answers: [], selected, need_followup: true, _restore: true});
+  }
+}
+
+async function submitAnswer(confidence) {
+  const res = await fetch('/api/train/answer', {method: 'POST', body: JSON.stringify({
+    question_id: q.id, selected, confidence, seconds }), ...conf});
+  const data = await res.json();
+  if (!data.ok) return;
+  stopTimer();
+  renderFeedback(data);
+}
+
+function renderFeedback(data) {
+  answered = true;
+  const ok = data.result === 'correct';
+  $('feedback-zone').classList.remove('hidden');
+  const card = $('feedback-card');
+  card.className = 'rounded-card p-6 mb-6 ' + (ok ? 'bg-emerald-50' : 'bg-red-50');
+  $('fb-icon').className = 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ' + (ok ? 'bg-emerald-100' : 'bg-red-100');
+  $('fb-icon').innerHTML = ok
+    ? '<svg class="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+    : '<svg class="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+  $('fb-title').textContent = ok ? '回答正确' : '回答错误';
+  $('fb-title').className = 'text-[16px] font-bold ' + (ok ? 'text-emerald-700' : 'text-red-600');
+  $('fb-sub').textContent = data._restore ? '回到中断的那一步:请选择错因后提交' : (data.need_followup ? '这题将进入强化与间隔复测' : '已记录,下一题');
+  $('fb-sub').className = 'text-[13px] ' + (ok ? 'text-emerald-600' : 'text-red-400');
+  $('fb-answers').textContent = (data.answers || []).join('') || selected.join('');
+
+  const fbOpts = $('fb-options'); fbOpts.innerHTML = '';
+  (q.options || []).forEach(o => {
+    const isAns = (data.answers || []).includes(o.id) || ((data.answers || []).length === 0 && data._restore);
+    const isSel = (data.selected || selected).includes(o.id);
+    let cls = 'bg-gray-50', mark = '';
+    if (isAns) { cls = 'bg-emerald-50'; mark = '✓ 正确答案'; }
+    if (isSel && !isAns) { cls = 'bg-red-50'; mark = '你的选择'; }
+    if (isSel && isAns) mark = '✓ 正确答案(你选对了)';
+    fbOpts.insertAdjacentHTML('beforeend', `
+      <div class="flex gap-3 p-3 rounded-input ${cls}">
+        <span class="text-[14px] font-semibold text-gray-500">${o.id}</span>
+        <span class="text-[14px] text-gray-800">${o.text.replace(/</g,'&lt;')}</span>
+        ${mark ? `<span class="ml-auto text-[12px] ${isAns ? 'text-emerald-600' : 'text-red-400'} self-center">${mark}</span>` : ''}
+      </div>`);
+  });
+
+  if (data.need_followup) {
+    $('reason-zone').classList.remove('hidden');
+    $('next-zone').classList.add('hidden');
+  } else {
+    $('reason-zone').classList.add('hidden');
+    $('next-zone').classList.remove('hidden');
+    $('next-btn').onclick = () => doSubmit();
+  }
+  $('confidence-zone').classList.add('hidden');
+}
+
+// 提交作答(record_review 落盘 + 推进会话),高信心答对与错因提交共用
+async function doSubmit() {
+  const body = {question_id: q.id, reason: window._reason || ''};
+  const res = await fetch('/api/train/submit', {method: 'POST', body: JSON.stringify(body), ...conf});
+  const data = await res.json();
+  if (!data.ok) { alert(data.error || '提交失败'); return; }
+  if (data.finished) {
+    $('done-summary').textContent = `共 ${data.summary.total} 题,答对 ${data.summary.correct} 题,答错 ${data.summary.wrong} 题。`;
+    show('done-panel');
+  } else { loadCurrent(); }
+}
+
+document.querySelectorAll('.conf-btn').forEach(b => b.onclick = () => {
+  if (answered || selected.length === 0) return;
+  submitAnswer(b.dataset.conf);
+});
+document.querySelectorAll('.reason-btn').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.reason-btn').forEach(x => x.classList.remove('!border-brand','!bg-brand-softer','!text-brand-dark'));
+  b.classList.add('!border-brand','!bg-brand-softer','!text-brand-dark');
+  window._reason = b.dataset.reason;
+  $('submit-btn').disabled = false;
+});
+$('submit-btn').onclick = () => doSubmit();
+
+async function startTraining(fresh) {
+  const body = fresh ? {
+    source: document.querySelector('input[name=source]:checked').value,
+    subject: $('subject-select').value, limit: $('limit-select').value,
+  } : {};
+  if (fresh) {
+    const res = await fetch('/api/train/start', {method: 'POST', body: JSON.stringify(body), ...conf});
+    const data = await res.json();
+    if (!data.ok) { alert(data.error || '启动失败'); return; }
+  }
+  loadCurrent();
+}
+$('start-btn').onclick = () => startTraining(true);
+$('resume-btn') && ($('resume-btn').onclick = () => startTraining(false));
+$('abort-btn') && ($('abort-btn').onclick = async () => {
+  await fetch('/api/train/abort', {method: 'POST', ...conf}); location.reload();
+});
+$('skip-btn').onclick = async () => {
+  if (answered) return;
+  await fetch('/api/train/skip', {method: 'POST', ...conf});
+  loadCurrent();
+};
+document.querySelectorAll('input[name=source]').forEach(r => r.onchange = () => {
+  $('subject-wrap').style.display = document.querySelector('input[name=source]:checked').value === 'subject' ? 'flex' : 'none';
+});
+
+// 初始:有进行中会话则直接恢复做题
+(async () => {
+  const res = await fetch('/api/train/session');
+  const data = await res.json();
+  if (data.active && !data.pending_answer) { startTraining(false); }
+  else { show('start-panel'); }
+})();
+</script>
+{% endblock %}

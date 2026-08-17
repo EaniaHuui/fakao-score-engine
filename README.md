@@ -48,7 +48,7 @@ AI 只有四条硬边界：不改原文；所有规则和解析保留来源与�
 
 ### 1. 准备项目和 Agent
 
-克隆本仓库，进入项目目录。如果需要拉取竹马数据需要 Python 3.9+；本地 CLI 不依赖第三方 Python 包。
+克隆本仓库，进入项目目录。如果需要拉取竹马数据需要 Python 3.9+；本地 CLI 不依赖第三方 Python 包。可选的网页工作台需要 `pip3 install -r 09_导入与处理工具/web/requirements.txt`（仅 Flask），用 `./fakao ui` 启动。
 
 让你已配置、且能访问当前项目目录的 AI Agent 读取项目内的 Skill。不同 Agent 的安装和启动方式不同；不要把 API Key、cookie 或个人资料提交到仓库。
 
@@ -166,7 +166,10 @@ Skill 负责问诊、判断和解释；CLI 负责稳定地读写本地资料、�
 ./fakao today
 ./fakao metrics
 ./fakao mock-record --score 108 --total-questions 100 --seconds 10800
+./fakao ui
 ```
+
+`./fakao ui` 打开本地网页工作台：逐题训练、分析报告、竹马导入、题库浏览、档案与模考都可以在网页完成，详见 [09_导入与处理工具/web/README.md](09_导入与处理工具/web/README.md)。
 
 记录一次复测：
 

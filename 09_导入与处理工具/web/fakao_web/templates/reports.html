@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% set active_page = 'reports' %}
+{% block title %}分析报告{% endblock %}
+
+{% macro pct(v) -%}
+{{ (v * 100) | round(0) | int if v is not none else '—' }}
+{%- endmacro %}
+
+{% block content %}
+<section class="mb-6 flex items-end justify-between">
+  <div>
+    <h1 class="text-[24px] font-bold text-gray-900 tracking-tight">分析报告</h1>
+    <p class="mt-1 text-[13px] text-gray-500">只用能反映提分的指标。样本不足时显示"证据不足",不假装有结论。</p>
+  </div>
+  <button id="regen-all" class="btn-spotlight h-10 px-5 rounded-btn bg-gradient-to-r from-brand to-brand-dark text-white text-[13px] font-semibold hover:brightness-110"><span>全部重新生成</span></button>
+</section>
+
+{# ── 提分指标 KPI ── #}
+<section class="mb-8">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-[16px] font-semibold text-gray-900">提分指标</h2>
+    <span class="text-[12px] text-gray-400">{% if metrics %}生成于 {{ metrics.generated_at[:16] }}{% else %}尚未生成{% endif %}</span>
+  </div>
+  {% if metrics and metrics.sample_counts.all_attempts %}
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4 items-stretch">
+    {% set kpis = [
+      (metrics.high_frequency_mistake_retest_accuracy, '错题复测正确率', 'blue', '<path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/>'),
+      (metrics.unseen_variant_accuracy, '陌生变体正确率', 'purple', '<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>'),
+      (metrics.average_seconds, '平均耗时', 'amber', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+      (metrics.correct_but_low_confidence_ratio, '猜对比例', 'red', '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+      (metrics.simulation_score_change, '模考成绩变化', 'emerald', '<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>'),
+    ] %}
+    {% for value, label, color, icon in kpis %}
+    <div class="bg-white rounded-card shadow-card p-5 flex flex-col">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-{{ color }}-50 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-{{ color }}-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ icon | safe }}</svg>
+        </div>
+        <p class="text-[13px] text-gray-500">{{ label }}</p>
+      </div>
+      {% if value is none %}
+      <p class="mt-3 text-[14px] text-gray-400 font-medium">证据不足</p>
+      {% elif loop.index == 3 %}
+      <p class="mt-3 text-[26px] font-bold text-gray-900 leading-none">{{ value }}<span class="text-[13px] font-normal text-gray-400"> 秒</span></p>
+      {% elif loop.index == 5 %}
+      <p class="mt-3 text-[26px] font-bold leading-none {{ 'text-emerald-600' if value > 0 else ('text-red-500' if value < 0 else 'text-gray-900') }}">{{ '+' if value > 0 }}{{ value }}<span class="text-[13px] font-normal text-gray-400"> 分</span></p>
+      {% else %}
+      <p class="mt-3 text-[26px] font-bold text-gray-900 leading-none">{{ pct(value) }}<span class="text-[13px] font-normal text-gray-400"> %</span></p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <p class="mt-3 text-[12px] text-gray-400">样本:{{ metrics.sample_counts.all_attempts }} 次作答,其中复测 {{ metrics.sample_counts.remedial_attempts }} 次 · 任何指标样本不足都不能视为提分证据</p>
+  {% else %}
+  <div class="bg-white rounded-card shadow-card py-12 text-center">
+    <svg class="size-8 text-gray-300 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+    <p class="mt-3 text-[14px] text-gray-400">还没有作答数据。先完成一轮训练,再生成指标。</p>
+  </div>
+  {% endif %}
+</section>
+
+{# ── 模考成绩折线 ── #}
+{% if mocks %}
+<section class="mb-8">
+  <h2 class="text-[16px] font-semibold text-gray-900 mb-4">模考成绩走势</h2>
+  <div class="bg-white rounded-card shadow-card p-6">
+    {% set pts = mocks | selectattr('score', 'number') | list %}
+    {% if pts | length >= 2 %}
+    {% set w, h, pad = 640, 200, 36 %}
+    {% set scores = pts | map(attribute='score') | list %}
+    {% set smin = scores | min %}
+    {% set smax = scores | max %}
+    {% set lo = smin - 4 %}
+    {% set hi = smax + 4 %}
+    {% set n = pts | length %}
+    <svg viewBox="0 0 {{ w }} {{ h }}" class="w-full">
+      {% set y108 = (h - pad - (108 - lo) * (h - 2 * pad) / (hi - lo)) | round(1) %}
+      <line x1="{{ pad }}" y1="{{ y108 }}" x2="{{ w - pad }}" y2="{{ y108 }}" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <text x="{{ w - pad }}" y="{{ y108 - 6 }}" text-anchor="end" font-size="11" fill="#D97706">合格线 108</text>
+      <polyline fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linejoin="round"
+        points="{% for m in pts %}{{ (pad + loop.index0 * (w - 2 * pad) / (n - 1)) | round(1) }},{{ (h - pad - (m.score - lo) * (h - 2 * pad) / (hi - lo)) | round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"/>
+      {% for m in pts %}
+      {% set cx = (pad + loop.index0 * (w - 2 * pad) / (n - 1)) | round(1) %}
+      {% set cy = (h - pad - (m.score - lo) * (h - 2 * pad) / (hi - lo)) | round(1) %}
+      <circle cx="{{ cx }}" cy="{{ cy }}" r="4" fill="#fff" stroke="#2563EB" stroke-width="2"/>
+      <text x="{{ cx }}" y="{{ cy - 10 }}" text-anchor="middle" font-size="11" fill="#6B7280">{{ m.score }}</text>
+      <text x="{{ cx }}" y="{{ h - 10 }}" text-anchor="middle" font-size="10" fill="#9CA3AF">{{ (m.date or '')[5:10] }}</text>
+      {% endfor %}
+    </svg>
+    {% else %}
+    <p class="text-[13px] text-gray-400 py-6 text-center">已有 {{ pts | length }} 次模考,再录一次即可看到走势对比。</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{# ── 错误聚类 ── #}
+<section class="mb-8">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h2 class="text-[16px] font-semibold text-gray-900">错误聚类</h2>
+      <p class="mt-0.5 text-[13px] text-gray-500">按错因 × 考点聚合,次数最多的是当前最大的提分空间</p>
+    </div>
+    <button data-regen="error_analysis" class="regen-btn h-9 px-4 rounded-btn bg-white border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50">重新分析</button>
+  </div>
+  {% set groups = (error_analysis or {}).get('groups', []) if error_analysis else [] %}
+  {% if groups %}
+  <div class="bg-white rounded-card shadow-card p-6 space-y-3">
+    {% set max_count = groups[0].count %}
+    {% for g in groups[:8] %}
+    <div class="flex items-center gap-4">
+      <span class="w-44 shrink-0 text-right text-[13px] text-gray-700">{{ g.reason }} × {{ g.knowledge_point }}</span>
+      <div class="flex-1 h-7 rounded-input bg-gray-100 overflow-hidden flex">
+        <div class="h-full bg-gradient-to-r from-brand to-brand-dark flex items-center justify-end pr-2" style="width: {{ (g.count / max_count * 100) | round(1) }}%">
+          <span class="text-[11px] font-semibold text-white">{{ g.count }}</span>
+        </div>
+      </div>
+      <span class="w-16 text-[12px] text-gray-400">{{ (g.question_types or {}) | tojson | truncate(22) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-card shadow-card py-10 text-center">
+    <p class="text-[14px] text-gray-400">暂无错误聚类数据。答错几道题后点"重新分析"。</p>
+  </div>
+  {% endif %}
+</section>
+
+{# ── 分科诊断 ── #}
+<section class="mb-8">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-[16px] font-semibold text-gray-900">分科诊断</h2>
+    <button data-regen="diagnose" class="regen-btn h-9 px-4 rounded-btn bg-white border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50">重新诊断</button>
+  </div>
+  {% set subjects = (diagnosis or {}).get('subjects', {}) if diagnosis else {} %}
+  {% if subjects %}
+  <div class="bg-white rounded-card shadow-card overflow-hidden">
+    <table class="w-full">
+      <thead>
+        <tr class="bg-gray-50 text-left text-[12px] text-gray-500">
+          <th class="px-5 py-3 font-medium">科目</th>
+          <th class="px-5 py-3 font-medium">题目数</th>
+          <th class="px-5 py-3 font-medium">答错记录</th>
+          <th class="px-5 py-3 font-medium">错误率</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for subject, v in subjects.items() %}
+        <tr class="tbl-row border-t border-gray-100 text-[13px]">
+          <td class="px-5 py-3 font-medium text-gray-800">{{ subject }}</td>
+          <td class="px-5 py-3 text-gray-600">{{ v.total }}</td>
+          <td class="px-5 py-3 text-gray-600">{{ v.wrong }}</td>
+          <td class="px-5 py-3">
+            {% if v.wrong %}
+            <span class="badge badge-red">{{ ((v.wrong / v.total) * 100) | round(0) | int }}%</span>
+            {% else %}<span class="badge badge-green">0</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-card shadow-card py-10 text-center">
+    <p class="text-[14px] text-gray-400">暂无诊断数据。点"重新诊断"生成。</p>
+  </div>
+  {% endif %}
+</section>
+
+<script>
+const conf = {headers: {'Content-Type': 'application/json'}};
+async function regen(kinds) {
+  const res = await fetch('/api/reports/regenerate', {method: 'POST', body: JSON.stringify({kind: kinds}), ...conf});
+  const data = await res.json();
+  if (data.ok) setTimeout(() => location.reload(), 300);
+  else alert(data.error || '生成失败');
+}
+document.querySelectorAll('.regen-btn').forEach(b => b.onclick = () => regen(b.dataset.regen));
+document.getElementById('regen-all').onclick = () => regen('all');
+</script>
+{% endblock %}
