@@ -10,6 +10,8 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.request
+import webbrowser
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -642,10 +644,26 @@ def cmd_zhuma(args):
         cmd_today(args)
 
 
+def web_running(port):
+    """检测工作台是否已在运行（通过 /api/ping 识别自家实例）。"""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:{}/api/ping".format(port), timeout=2) as response:
+            return json.loads(response.read().decode("utf-8")).get("app") == "fakao-web"
+    except Exception:
+        return False
+
+
 def cmd_ui(args):
-    server = Path(__file__).with_name("web") / "server.py"
+    # web/ 与 cli/ 同为 09_导入与处理工具 的子目录
+    server = Path(__file__).resolve().parent.parent / "web" / "server.py"
     if not server.exists():
         raise SystemExit("缺少 Web 组件，请更新仓库。")
+    url = "http://{}:{}/".format("127.0.0.1" if args.host == "0.0.0.0" else args.host, args.port)
+    # 幂等：已在运行则直接打开浏览器，不重复起实例
+    if web_running(args.port):
+        print("工作台已在运行：{}".format(url))
+        webbrowser.open(url)
+        return
     try:
         import flask  # noqa: F401
     except ImportError:
@@ -654,6 +672,7 @@ def cmd_ui(args):
             "    pip3 install -r 09_导入与处理工具/web/requirements.txt\n"
             "（核心 CLI 功能仍零依赖，不受影响）"
         )
+    print("正在启动工作台（浏览器将自动打开）…")
     raise SystemExit(subprocess.run(
         [sys.executable, str(server), "--host", args.host, "--port", str(args.port)],
         cwd=str(ROOT), check=False).returncode)

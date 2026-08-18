@@ -17,4 +17,9 @@ def create_app():
 
     for bp in (dashboard_bp, train_bp, reports_bp, bank_bp, profile_bp, zhuma_bp):
         app.register_blueprint(bp)
+
+    @app.route("/api/ping")
+    def ping():
+        # 供 ./fakao ui 识别"工作台已在运行"，避免重复起实例
+        return {"ok": True, "app": "fakao-web"}
     return app
