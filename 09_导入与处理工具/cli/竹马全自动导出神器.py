@@ -6,6 +6,7 @@
   python3 竹马全自动导出神器.py auto            # 默认：有有效本地会话直接导出，否则打开浏览器
   python3 竹马全自动导出神器.py open            # 打开临时浏览器后立即返回（不等登录，不挂起）
   python3 竹马全自动导出神器.py login           # 用户登录完成后：取会话 -> 落盘 -> 导出
+  python3 竹马全自动导出神器.py exams           # 全量抓取历年真题（有会话直接抓，否则走登录流程）
   python3 竹马全自动导出神器.py close           # 关闭临时浏览器并清理状态
   python3 竹马全自动导出神器.py --chrome-path <path> [action]
 
@@ -63,6 +64,15 @@ BROWSER_STATE_FILE = ROOT / "00_系统与用户" / "zhuma_browser.json"  # 临�
 
 # 请求时丢弃的传输层头（urllib 会自己生成），其余完整保留以通过竹马签名校验
 DROP_HEADERS = {"host", "content-length", "connection", "accept-encoding"}
+
+
+def clean_browser_headers(headers):
+    """去掉 HTTP/2 伪头（:authority 等）与传输层头；urllib(HTTP/1.1) 无法发送它们。"""
+    return {
+        key: value
+        for key, value in headers.items()
+        if not key.startswith(":") and key.lower() not in DROP_HEADERS
+    }
 
 LOGIN_HINT = (
     "👉 请在弹出的浏览器中登录竹马并完成验证码。\n"
@@ -324,8 +334,7 @@ def capture_live_headers(port, probe_url=None, timeout=15):
         picked = next((u for u in urls if urllib.parse.urlparse(u).path == probe_path), None)
         if picked is None and urls:
             picked = urls[-1]
-        cleaned = {k: v for k, v in best_headers.items() if k.lower() not in DROP_HEADERS}
-        return {"url": picked or probe, "headers": cleaned}
+        return {"url": picked or probe, "headers": clean_browser_headers(best_headers)}
     finally:
         connection.close()
 
@@ -724,6 +733,21 @@ def export_all(headers):
     return pull_personal_data(headers, "01", "错题", str(target))
 
 
+def exams_output_dir():
+    target = ROOT / "02_原始资料库" / "真题原卷"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def export_past_exams(headers):
+    """全量导出历年真题到 02_原始资料库/真题原卷。"""
+    if not has_credentials(headers):
+        print("❌ 会话缺少凭据，无法导出。")
+        return 0
+    pull_past_exams(headers, str(exams_output_dir()))
+    return 1
+
+
 # ---------------------------------------------------------------- 浏览器生命周期
 
 def open_browser(chrome_path=None):
@@ -827,12 +851,42 @@ def cmd_auto(args):
             return
         print("⚠️ 本地会话导出失败，自修复未能恢复，需要重新登录。")
 
+    enter_login_flow(args)
+
+
+def cmd_exams(args):
+    """全量抓取历年真题：有会话直接抓；否则走登录流程提示用户登录。"""
+    session = load_session()
+    if session and is_logged_in(session.get("headers", {})):
+        print("🔑 发现本地已保存的登录态，直接开始抓取历年真题（无需重新登录）。")
+        export_past_exams(session["headers"])
+        return
+
+    state = load_browser_state()
+    if state and port_alive(state.get("port")):
+        live = None
+        try:
+            live = capture_live_headers(state["port"])
+        except SystemExit:
+            live = None
+        if live and is_logged_in(live["headers"]):
+            save_session(live["headers"])
+            export_past_exams(live["headers"])
+            return
+
+    enter_login_flow(args)
+
+
+def enter_login_flow(args):
+    """打开（或复用）临时浏览器并提示用户登录；登录后由 login 动作继续。"""
     state = load_browser_state()
     if state and port_alive(state.get("port")):
         print("✅ 检测到已打开的竹马浏览器（端口 {}）。".format(state["port"]))
     else:
         open_browser(args.chrome_path)
     print(LOGIN_HINT)
+    print("ℹ️ 登录完成后请运行 `./fakao zhuma login`（或 `python3 竹马全自动导出神器.py login`）继续导出错题；")
+    print("   历年真题抓取请改运行 `exams` 动作（或 `./fakao zhuma exams`）。")
 
 
 # ---------------------------------------------------------------- main
@@ -843,8 +897,8 @@ def main():
         "action",
         nargs="?",
         default="auto",
-        choices=["auto", "open", "login", "close"],
-        help="auto=智能(默认,有会话直接导出) open=打开浏览器 login=登录后导出 close=关闭浏览器",
+        choices=["auto", "open", "login", "exams", "close"],
+        help="auto=智能(默认,有会话直接导出) open=打开浏览器 login=登录后导出 exams=全量抓取历年真题 close=关闭浏览器",
     )
     parser.add_argument("--chrome-path", help="Chrome、Chromium 或 Edge 的可执行文件路径")
     args = parser.parse_args()
@@ -853,6 +907,8 @@ def main():
         cmd_open(args)
     elif args.action == "login":
         cmd_login(args)
+    elif args.action == "exams":
+        cmd_exams(args)
     elif args.action == "close":
         close_browser()
     else:
