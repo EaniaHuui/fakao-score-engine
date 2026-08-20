@@ -114,6 +114,18 @@ def subject_from_text(text):
     return "未分类"
 
 
+ANSWER_MARK_RE = re.compile(r"\s*\*\*\([^)]*(?:正确答案|我的答案)[^)]*\)\*\*\s*$")
+
+
+def strip_answer_marks(text):
+    """剥掉竹马导出追加在选项尾部的 **(✅ 正确答案, ❌ 我的答案)** 标记。
+
+    判分信息已由 answers/user_answers 字段承载，展示文本必须干净，
+    否则做题界面会把答案直接显示出来。幂等：干净文本原样返回。
+    """
+    return ANSWER_MARK_RE.sub("", text or "").strip()
+
+
 def parse_questions(path):
     text = path.read_text(encoding="utf-8", errors="ignore")
     blocks = re.split(r"(?m)^##\s+", text)
@@ -127,11 +139,13 @@ def parse_questions(path):
             match = re.match(r"-\s+\[([ xX])\]\s+([A-Z])\.\s+(.*)", line)
             if match:
                 option_text = match.group(3).strip()
+                user_selected = "❌ 我的答案" in option_text
+                option_text = strip_answer_marks(option_text)
                 options.append({
                     "id": match.group(2),
                     "text": option_text,
                     "correct": match.group(1).lower() == "x",
-                    "user_selected": "❌ 我的答案" in option_text,
+                    "user_selected": user_selected,
                 })
         if not question_match and not options:
             continue
@@ -256,6 +270,9 @@ def all_questions():
         value = load_json(path, [])
         if isinstance(value, list):
             for question in value:
+                # 存量结构化 json（如竹马导出转存的）可能仍带答案标记，读取时统一清洗
+                for option in question.get("options", []):
+                    option["text"] = strip_answer_marks(option.get("text", ""))
                 enrich_question(question)
             result.extend(value)
     for path in WRONG_DIR.glob("*.md"):
@@ -689,9 +706,9 @@ def build_parser():
     imp = sub.add_parser("import", help="导入用户资料并尝试解析 Markdown 题目")
     imp.add_argument("path")
     imp.set_defaults(func=cmd_import)
-    zhuma = sub.add_parser("zhuma", help="导入竹马错题（auto/open/login/close）")
-    zhuma.add_argument("action", nargs="?", default="auto", choices=["auto", "open", "login", "close"],
-                       help="auto=有会话直接导出否则打开浏览器 open=打开浏览器 login=登录后导出 close=关闭浏览器")
+    zhuma = sub.add_parser("zhuma", help="导入竹马错题或抓取历年真题（auto/open/login/exams/close）")
+    zhuma.add_argument("action", nargs="?", default="auto", choices=["auto", "open", "login", "exams", "close"],
+                       help="auto=有会话直接导出否则打开浏览器 open=打开浏览器 login=登录后导出 exams=全量抓取历年真题 close=关闭浏览器")
     zhuma.add_argument("--chrome-path", help="Chrome、Chromium 或 Edge 的可执行文件路径")
     zhuma.set_defaults(func=cmd_zhuma)
     ui = sub.add_parser("ui", help="启动本地 Web 工作台")
